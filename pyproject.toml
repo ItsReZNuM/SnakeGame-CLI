@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "snakegame-cli"
+name = "reznum-snakegame"
 version = "0.1.0"
 description = "A polished, retro Nokia-inspired Snake game for your terminal powered by Rich."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
 authors = [
-    { name = "SnakeGame Team" }
+    { name = "ItsReZNuM", email = "rmohamadnia85@gmail.com" }
 ]
 keywords = [
     "snake",
@@ -45,15 +45,18 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "build>=1.0.0",
+    "twine>=4.0.0",
 ]
 
 [project.scripts]
 snakegame = "snakegame.cli:main"
+snakegame-cli = "snakegame.cli:main"
+reznum-snakegame = "snakegame.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/example/snakegame-cli"
-Repository = "https://github.com/example/snakegame-cli"
-"Bug Tracker" = "https://github.com/example/snakegame-cli/issues"
+Homepage = "https://github.com/ItsReZNuM/SnakeGame-CLI"
+Repository = "https://github.com/ItsReZNuM/SnakeGame-CLI"
+"Bug Tracker" = "https://github.com/ItsReZNuM/SnakeGame-CLI/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

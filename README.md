@@ -1,5 +1,6 @@
 # SnakeGame CLI
 
+[![PyPI version](https://img.shields.io/pypi/v/reznum-snakegame.svg)](https://pypi.org/project/reznum-snakegame/)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub Star](https://img.shields.io/badge/GitHub-Star%20Repo-yellow.svg)](https://github.com/ItsReZNuM/SnakeGame-CLI)
@@ -79,6 +80,12 @@ Built with extensive customization, 5 vibrant color themes, an interactive main 
 ---
 
 ## Installation
+
+### Install via pip (PyPI)
+
+```bash
+pip install reznum-snakegame
+```
 
 ### Install from Source
 
