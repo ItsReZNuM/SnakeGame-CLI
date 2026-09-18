@@ -17,9 +17,12 @@ class Action(Enum):
     DOWN = auto()
     LEFT = auto()
     RIGHT = auto()
+    SELECT = auto()
+    START = SELECT
+    BACK = auto()
     PAUSE = auto()
     RESTART = auto()
-    START = auto()
+    MENU = auto()
     QUIT = auto()
 
 
@@ -58,10 +61,8 @@ class InputHandler:
         if ch == "\x03":
             raise KeyboardInterrupt
 
-        # Extended key prefix for arrow keys
+        # Extended key prefix for arrow keys (Standard CMD / PowerShell scan codes)
         if ch in ("\x00", "\xe0"):
-            if not msvcrt.kbhit():
-                return None
             code = msvcrt.getwch()
             if code == "H":
                 return Action.UP
@@ -72,6 +73,23 @@ class InputHandler:
             elif code == "M":
                 return Action.RIGHT
             return None
+
+        # Virtual Terminal / ANSI Escape Sequences (Windows Terminal)
+        if ch == "\x1b":
+            if msvcrt.kbhit():
+                next_ch = msvcrt.getwch()
+                if next_ch == "[":
+                    if msvcrt.kbhit():
+                        arrow = msvcrt.getwch()
+                        if arrow == "A":
+                            return Action.UP
+                        elif arrow == "B":
+                            return Action.DOWN
+                        elif arrow == "D":
+                            return Action.LEFT
+                        elif arrow == "C":
+                            return Action.RIGHT
+            return Action.BACK
 
         return self._map_char(ch)
 
@@ -88,7 +106,6 @@ class InputHandler:
             raise KeyboardInterrupt
 
         if ch == "\x1b":
-            # Check if this is an ANSI escape sequence
             r2, _, _ = select.select([sys.stdin], [], [], 0.02)
             if r2:
                 seq = sys.stdin.read(2)
@@ -100,7 +117,7 @@ class InputHandler:
                     return Action.LEFT
                 elif seq == "[C":
                     return Action.RIGHT
-            return Action.QUIT
+            return Action.BACK
 
         return self._map_char(ch)
 
@@ -115,12 +132,16 @@ class InputHandler:
             return Action.LEFT
         elif low == "d":
             return Action.RIGHT
+        elif low in (" ", "\r", "\n"):
+            return Action.SELECT
+        elif low in ("\x08", "b"):
+            return Action.BACK
         elif low == "p":
             return Action.PAUSE
         elif low == "r":
             return Action.RESTART
-        elif low in ("q", "\x1b"):
+        elif low == "m":
+            return Action.MENU
+        elif low == "q":
             return Action.QUIT
-        elif low in (" ", "\r", "\n"):
-            return Action.START
         return None

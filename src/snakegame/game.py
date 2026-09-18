@@ -7,24 +7,32 @@ from rich.live import Live
 
 from snakegame.board import Board, Point
 from snakegame.config import GameConfig
-from snakegame.food import Food
+from snakegame.food import Food, SuperFood
 from snakegame.input import Action, InputHandler
 from snakegame.snake import Direction, Snake
 from snakegame.storage import ScoreStorage
+from snakegame.theme import THEME_NAMES
 from snakegame.ui import GameRenderer
 
 
 class GameState(Enum):
-    START_SCREEN = auto()
+    MAIN_MENU = auto()
+    SETTINGS = auto()
+    ABOUT = auto()
     PLAYING = auto()
     PAUSED = auto()
     GAME_OVER = auto()
     EXIT = auto()
 
 
+GameState.START_SCREEN = GameState.MAIN_MENU  # type: ignore
+
+
 class Game:
     def __init__(self, config: GameConfig, console: Optional[Console] = None) -> None:
         self.config = config
+        self.config.load_saved_settings()
+
         self.console = console or Console(no_color=config.no_color)
         self.storage = ScoreStorage(config.storage_path)
         self.renderer = GameRenderer(config, self.console)
@@ -33,15 +41,22 @@ class Game:
         self.board = Board(width=config.width, height=config.height)
         self.high_score = self.storage.load_high_score()
 
-        self.state = GameState.START_SCREEN
+        self.state = GameState.MAIN_MENU
+        self.main_menu_index = 0
+        self.settings_index = 0
+
         self.score = 0
+        self.regular_foods_eaten = 0
+        self.super_foods_eaten = 0
         self.snake: Snake = self._create_initial_snake()
         self.food: Optional[Food] = None
+        self.super_food: Optional[SuperFood] = None
         self.is_new_high = False
 
         self.elapsed_time = 0.0
         self._last_resume_time = 0.0
         self._last_tick_time = 0.0
+        self._pause_start_time = 0.0
 
     def _create_initial_snake(self) -> Snake:
         start_x = max(3, self.board.width // 2)
@@ -49,12 +64,16 @@ class Game:
         return Snake(initial_head=Point(start_x, start_y), initial_length=3, direction=Direction.RIGHT)
 
     def _reset_game(self) -> None:
+        self.board = Board(width=self.config.width, height=self.config.height)
         self.score = 0
+        self.regular_foods_eaten = 0
+        self.super_foods_eaten = 0
         self.elapsed_time = 0.0
         self.is_new_high = False
         self.high_score = self.storage.load_high_score()
         self.snake = self._create_initial_snake()
         self.food = Food.spawn(self.board, self.snake.body_set, points=self.config.points_per_food)
+        self.super_food = None
         self.state = GameState.PLAYING
         now = time.perf_counter()
         self._last_resume_time = now
@@ -62,7 +81,7 @@ class Game:
 
     @property
     def current_speed(self) -> float:
-        food_eaten = self.score // max(1, self.config.points_per_food)
+        food_eaten = max(self.regular_foods_eaten, self.score // max(1, self.config.points_per_food))
         speed = self.config.initial_speed + (food_eaten * self.config.speed_increment)
         return min(self.config.max_speed, speed)
 
@@ -70,7 +89,7 @@ class Game:
         self.input_handler.enter()
         try:
             with Live(
-                self.renderer.render_start_screen(self.high_score),
+                self.renderer.render_main_menu(self.main_menu_index, self.high_score),
                 console=self.console,
                 screen=True,
                 auto_refresh=False,
@@ -91,13 +110,30 @@ class Game:
         if action is None:
             return
 
-        if action == Action.QUIT:
-            self.state = GameState.EXIT
-            return
+        if self.state == GameState.MAIN_MENU:
+            if action == Action.UP:
+                self.main_menu_index = (self.main_menu_index - 1) % 4
+            elif action == Action.DOWN:
+                self.main_menu_index = (self.main_menu_index + 1) % 4
+            elif action == Action.SELECT:
+                if self.main_menu_index == 0:
+                    self._reset_game()
+                elif self.main_menu_index == 1:
+                    self.settings_index = 0
+                    self.state = GameState.SETTINGS
+                elif self.main_menu_index == 2:
+                    self.state = GameState.ABOUT
+                elif self.main_menu_index == 3:
+                    self.state = GameState.EXIT
+            elif action == Action.QUIT:
+                self.state = GameState.EXIT
 
-        if self.state == GameState.START_SCREEN:
-            if action in (Action.START, Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT):
-                self._reset_game()
+        elif self.state == GameState.SETTINGS:
+            self._handle_settings_input(action)
+
+        elif self.state == GameState.ABOUT:
+            if action in (Action.BACK, Action.SELECT, Action.MENU, Action.QUIT):
+                self.state = GameState.MAIN_MENU
 
         elif self.state == GameState.PLAYING:
             if action == Action.UP:
@@ -108,39 +144,108 @@ class Game:
                 self.snake.change_direction(Direction.LEFT)
             elif action == Action.RIGHT:
                 self.snake.change_direction(Direction.RIGHT)
-            elif action in (Action.PAUSE, Action.START):
-                # Pause the game and record accumulated time
+            elif action == Action.PAUSE:
                 self.elapsed_time += time.perf_counter() - self._last_resume_time
+                self._pause_start_time = time.perf_counter()
                 self.state = GameState.PAUSED
+            elif action == Action.QUIT:
+                self.state = GameState.MAIN_MENU
 
         elif self.state == GameState.PAUSED:
-            if action in (Action.PAUSE, Action.START, Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT):
-                # Resume the game and reset resume baseline
-                self._last_resume_time = time.perf_counter()
-                self._last_tick_time = time.perf_counter()
+            if action in (Action.PAUSE, Action.SELECT, Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT):
+                pause_duration = time.perf_counter() - self._pause_start_time
+                if self.super_food is not None:
+                    self.super_food.spawn_time += pause_duration
+                now = time.perf_counter()
+                self._last_resume_time = now
+                self._last_tick_time = now
                 self.state = GameState.PLAYING
+            elif action in (Action.QUIT, Action.MENU):
+                self.state = GameState.MAIN_MENU
 
         elif self.state == GameState.GAME_OVER:
-            if action == Action.RESTART or action == Action.START:
+            if action in (Action.RESTART, Action.SELECT):
                 self._reset_game()
+            elif action in (Action.MENU, Action.BACK):
+                self.state = GameState.MAIN_MENU
+            elif action == Action.QUIT:
+                self.state = GameState.EXIT
+
+    def _handle_settings_input(self, action: Action) -> None:
+        if action == Action.UP:
+            self.settings_index = (self.settings_index - 1) % 6
+        elif action == Action.DOWN:
+            self.settings_index = (self.settings_index + 1) % 6
+        elif action == Action.LEFT:
+            if self.settings_index == 0:
+                self.config.width = max(10, self.config.width - 2)
+            elif self.settings_index == 1:
+                self.config.height = max(8, self.config.height - 1)
+            elif self.settings_index == 2:
+                idx = THEME_NAMES.index(self.config.theme_name) if self.config.theme_name in THEME_NAMES else 0
+                self.config.theme_name = THEME_NAMES[(idx - 1) % len(THEME_NAMES)]
+            elif self.settings_index == 3:
+                self.config.initial_speed = max(1.0, round(self.config.initial_speed - 0.5, 1))
+            elif self.settings_index == 4:
+                self.config.super_food_enabled = not self.config.super_food_enabled
+        elif action == Action.RIGHT:
+            if self.settings_index == 0:
+                self.config.width = min(60, self.config.width + 2)
+            elif self.settings_index == 1:
+                self.config.height = min(35, self.config.height + 1)
+            elif self.settings_index == 2:
+                idx = THEME_NAMES.index(self.config.theme_name) if self.config.theme_name in THEME_NAMES else 0
+                self.config.theme_name = THEME_NAMES[(idx + 1) % len(THEME_NAMES)]
+            elif self.settings_index == 3:
+                self.config.initial_speed = min(25.0, round(self.config.initial_speed + 0.5, 1))
+            elif self.settings_index == 4:
+                self.config.super_food_enabled = not self.config.super_food_enabled
+        elif action == Action.SELECT:
+            if self.settings_index == 4:
+                self.config.super_food_enabled = not self.config.super_food_enabled
+            elif self.settings_index == 5:
+                self.config.save_settings()
+                self.board = Board(self.config.width, self.config.height)
+                self.state = GameState.MAIN_MENU
+        elif action == Action.BACK:
+            self.config.save_settings()
+            self.board = Board(self.config.width, self.config.height)
+            self.state = GameState.MAIN_MENU
 
     def _update(self) -> None:
         if self.state != GameState.PLAYING:
             return
 
         now = time.perf_counter()
-        tick_interval = 1.0 / self.current_speed
 
+        # Check SuperFood expiration
+        if self.super_food is not None and self.super_food.is_expired(now):
+            self.super_food = None
+
+        tick_interval = 1.0 / self.current_speed
         if now - self._last_tick_time < tick_interval:
             return
 
         self._last_tick_time = now
         next_head = self.snake.peek_next_head()
-        eating_food = self.food is not None and next_head == self.food.position
 
-        if eating_food:
+        eating_regular = self.food is not None and next_head == self.food.position
+        eating_super = self.super_food is not None and next_head == self.super_food.position
+
+        if eating_regular:
             self.score += self.food.points
+            self.regular_foods_eaten += 1
             self.snake.grow(1)
+            if self.score > self.high_score:
+                self.high_score = self.score
+                self.is_new_high = True
+                self.storage.save_high_score(self.high_score)
+
+        elif eating_super:
+            self.score += self.super_food.points
+            self.super_foods_eaten += 1
+            self.snake.grow(self.super_food.growth)
+            self.super_food = None
             if self.score > self.high_score:
                 self.high_score = self.score
                 self.is_new_high = True
@@ -158,10 +263,33 @@ class Game:
             self._trigger_game_over()
             return
 
-        if eating_food:
-            self.food = Food.spawn(self.board, self.snake.body_set, points=self.config.points_per_food)
+        # Handle post-step food spawn
+        if eating_regular:
+            occupied = self.snake.body_set
+            if self.super_food is not None:
+                occupied = occupied | {self.super_food.position}
+            self.food = Food.spawn(self.board, occupied, points=self.config.points_per_food)
+
+            # Spawn SuperFood every 5 foods if enabled and none currently active
+            if (
+                self.config.super_food_enabled
+                and self.regular_foods_eaten > 0
+                and self.regular_foods_eaten % self.config.super_food_interval == 0
+                and self.super_food is None
+            ):
+                occupied_all = self.snake.body_set
+                if self.food is not None:
+                    occupied_all = occupied_all | {self.food.position}
+                self.super_food = SuperFood.spawn(
+                    board=self.board,
+                    occupied=occupied_all,
+                    spawn_time=time.perf_counter(),
+                    duration=self.config.super_food_duration,
+                    points=self.config.super_food_points,
+                    growth=self.config.super_food_growth,
+                )
+
             if self.food is None:
-                # Board completely filled - game won!
                 self._trigger_game_over()
 
     def _trigger_game_over(self) -> None:
@@ -177,8 +305,24 @@ class Game:
         return self.elapsed_time
 
     def _render(self, live: Live) -> None:
-        if self.state == GameState.START_SCREEN:
-            live.update(self.renderer.render_start_screen(self.high_score), refresh=True)
+        if self.state == GameState.MAIN_MENU:
+            live.update(self.renderer.render_main_menu(self.main_menu_index, self.high_score), refresh=True)
+
+        elif self.state == GameState.SETTINGS:
+            term_size = self.console.size
+            live.update(
+                self.renderer.render_settings_menu(
+                    config=self.config,
+                    selected_index=self.settings_index,
+                    term_width=term_size.width,
+                    term_height=term_size.height,
+                ),
+                refresh=True,
+            )
+
+        elif self.state == GameState.ABOUT:
+            live.update(self.renderer.render_about_creator(), refresh=True)
+
         elif self.state in (GameState.PLAYING, GameState.PAUSED):
             play_time = self._current_play_time()
             live.update(
@@ -190,10 +334,13 @@ class Game:
                     high_score=self.high_score,
                     elapsed_time=play_time,
                     speed=self.current_speed,
+                    super_food=self.super_food,
+                    current_time=time.perf_counter(),
                     is_paused=(self.state == GameState.PAUSED),
                 ),
                 refresh=True,
             )
+
         elif self.state == GameState.GAME_OVER:
             live.update(
                 self.renderer.render_game_over_screen(
@@ -202,6 +349,7 @@ class Game:
                     elapsed_time=self.elapsed_time,
                     snake_length=self.snake.length,
                     is_new_high=self.is_new_high,
+                    super_foods_eaten=self.super_foods_eaten,
                 ),
                 refresh=True,
             )

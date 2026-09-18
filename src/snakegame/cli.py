@@ -12,6 +12,7 @@ from rich.text import Text
 from snakegame import __version__
 from snakegame.config import ConfigError, GameConfig
 from snakegame.game import Game
+from snakegame.theme import THEME_NAMES
 
 
 class RichArgumentParser(argparse.ArgumentParser):
@@ -31,7 +32,7 @@ def display_help(console: Console) -> None:
     header = Text()
     header.append("  ╔═════════════════════════════════════════════════════════════╗\n", style="bold bright_green")
     header.append("  ║                     S N A K E   G A M E                     ║\n", style="bold bright_green")
-    header.append("  ║                 Classic Nokia Terminal Edition              ║\n", style="bold bright_green")
+    header.append("  ║                       Terminal CLI Edition                  ║\n", style="bold bright_green")
     header.append("  ╚═════════════════════════════════════════════════════════════╝", style="bold bright_green")
 
     banner_panel = Panel(
@@ -55,22 +56,36 @@ def display_help(console: Console) -> None:
     options_table.add_row("-w, --width <int>", "24", "Grid width in cells (range: 10 - 60)")
     options_table.add_row("-H, --height <int>", "16", "Grid height in cells (range: 8 - 35)")
     options_table.add_row("-s, --speed <float>", "6.0", "Initial movement speed in moves/sec (1.0 - 25.0)")
+    options_table.add_row("-t, --theme <str>", "Nokia Classic", f"Color theme: {', '.join(THEME_NAMES)}")
     options_table.add_row("--no-color", "False", "Disable terminal colors (monochrome mode)")
     options_table.add_row("-v, --version", "-", "Display version information and exit")
     options_table.add_row("-h, --help", "-", "Show this polished help guide and exit")
+
+    features_table = Table(box=ROUNDED, border_style="dim cyan", show_header=True, expand=True)
+    features_table.add_column("Feature", style="bold cyan", ratio=3)
+    features_table.add_column("Details", style="white", ratio=7)
+
+    features_table.add_row("Interactive Menu", "Start Game, Settings, About Creator, Exit")
+    features_table.add_row("Custom Settings", "Real-time terminal dimension preview, theme picker, size adjust")
+    features_table.add_row("5 Color Themes", "Nokia Classic, Cyberpunk Neon, Retro Amber, Synthwave, Matrix")
+    features_table.add_row("SuperFood (Bonus)", "Spawns every 5 foods with a 5-second countdown timer (+50 pts, +3 size)")
 
     controls_table = Table(box=ROUNDED, border_style="dim green", show_header=True, expand=True)
     controls_table.add_column("Action", style="bold cyan", ratio=3)
     controls_table.add_column("Keys", style="bold bright_white", ratio=5)
 
-    controls_table.add_row("Move Snake", "Arrow Keys (↑ ↓ ← →) or W / A / S / D")
+    controls_table.add_row("Move Snake / Navigate", "Arrow Keys (↑ ↓ ← →) or W / A / S / D")
+    controls_table.add_row("Select / Confirm", "Enter  or  Spacebar")
+    controls_table.add_row("Back / Cancel", "ESC  or  B")
     controls_table.add_row("Pause / Resume", "P  or  Spacebar")
     controls_table.add_row("Restart Game", "R  (on Game Over)")
+    controls_table.add_row("Main Menu", "M  (on Game Over or Pause)")
     controls_table.add_row("Quit", "Q  or  ESC")
 
     examples_text = Text.from_markup(
         "[bold]Standard Game:[/]            [green]snakegame[/green]\n"
-        "[bold]Larger Custom Arena:[/]      [green]snakegame --width 32 --height 20[/green]\n"
+        "[bold]Custom Dimensions:[/]        [green]snakegame --width 32 --height 20[/green]\n"
+        "[bold]Cyberpunk Theme:[/]          [green]snakegame --theme \"Cyberpunk Neon\"[/green]\n"
         "[bold]Fast Challenge Mode:[/]      [green]snakegame --speed 10.0[/green]\n"
         "[bold]Monochrome Mode:[/]          [green]snakegame --no-color[/green]"
     )
@@ -78,6 +93,7 @@ def display_help(console: Console) -> None:
     console.print(banner_panel)
     console.print(Panel(usage_text, title="[bold]Execution Syntax[/bold]", box=ROUNDED, border_style="cyan"))
     console.print(Panel(options_table, title="[bold]Available CLI Options[/bold]", box=ROUNDED, border_style="green"))
+    console.print(Panel(features_table, title="[bold]Game Features[/bold]", box=ROUNDED, border_style="cyan"))
     console.print(Panel(controls_table, title="[bold]In-Game Controls[/bold]", box=ROUNDED, border_style="yellow"))
     console.print(Panel(examples_text, title="[bold]Examples[/bold]", box=ROUNDED, border_style="magenta"))
 
@@ -86,16 +102,17 @@ def display_version(console: Console) -> None:
     text = Text.from_markup(
         f"[bold bright_green]SnakeGame CLI[/bold bright_green] "
         f"[bold cyan]v{__version__}[/bold cyan] "
-        f"[dim]• Retro Nokia 3310 Terminal Edition[/dim]"
+        f"[dim]• Terminal Edition[/dim]"
     )
     console.print(Panel(Align.center(text), box=ROUNDED, border_style="bright_green"))
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    parser = RichArgumentParser(description="Classic Retro Nokia Snake for the Terminal.")
+    parser = RichArgumentParser(description="SnakeGame CLI - Classic Terminal Edition.")
     parser.add_argument("-w", "--width", type=int, default=24, help="Grid width in cells")
     parser.add_argument("-H", "--height", type=int, default=16, help="Grid height in cells")
     parser.add_argument("-s", "--speed", type=float, default=6.0, help="Initial speed in moves/second")
+    parser.add_argument("-t", "--theme", type=str, default=None, choices=THEME_NAMES, help="Color theme")
     parser.add_argument("--no-color", action="store_true", default=False, help="Disable ANSI color codes")
     parser.add_argument("-v", "--version", action="store_true", help="Show version and exit")
     parser.add_argument("-h", "--help", action="store_true", help="Show help and exit")
@@ -134,6 +151,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             initial_speed=args.speed,
             no_color=args.no_color,
         )
+        if args.theme:
+            config.theme_name = args.theme
         config.validate()
 
     except ConfigError as exc:
