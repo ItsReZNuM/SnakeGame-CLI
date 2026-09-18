@@ -11,16 +11,18 @@ from snakegame.food import Food, SuperFood
 from snakegame.input import Action, InputHandler
 from snakegame.snake import Direction, Snake
 from snakegame.storage import ScoreStorage
-from snakegame.theme import THEME_NAMES
+from snakegame.theme import THEME_NAMES, get_theme
 from snakegame.ui import GameRenderer
 
 
 class GameState(Enum):
     MAIN_MENU = auto()
     SETTINGS = auto()
+    KEYBINDINGS = auto()
     ABOUT = auto()
     PLAYING = auto()
     PAUSED = auto()
+    DYING = auto()
     GAME_OVER = auto()
     EXIT = auto()
 
@@ -34,7 +36,7 @@ class Game:
         self.console = console or Console(no_color=config.no_color)
         self.storage = ScoreStorage(config.storage_path)
         self.renderer = GameRenderer(config, self.console)
-        self.input_handler = InputHandler()
+        self.input_handler = InputHandler(config.keybindings)
 
         self.board = Board(width=config.width, height=config.height)
         self.high_score = self.storage.load_high_score()
@@ -42,6 +44,10 @@ class Game:
         self.state = GameState.MAIN_MENU
         self.main_menu_index = 0
         self.settings_index = 0
+        self.keybindings_index = 0
+        self.binding_target: Optional[str] = None
+        self.death_flash: bool = False
+        self._death_start_time: float = 0.0
 
         self.score = 0
         self.regular_foods_eaten = 0
@@ -104,6 +110,19 @@ class Game:
             self.console.show_cursor(True)
 
     def _handle_input(self) -> None:
+        if self.state == GameState.KEYBINDINGS and self.binding_target is not None:
+            raw_key = self.input_handler.get_raw_key()
+            if raw_key is not None:
+                if raw_key == "esc":
+                    self.binding_target = None
+                else:
+                    val = " " if raw_key == "space" else raw_key
+                    self.config.keybindings[self.binding_target] = val
+                    self.input_handler.set_keybindings(self.config.keybindings)
+                    self.config.save_settings()
+                    self.binding_target = None
+            return
+
         action = self.input_handler.get_action()
         if action is None:
             return
@@ -129,6 +148,9 @@ class Game:
         elif self.state == GameState.SETTINGS:
             self._handle_settings_input(action)
 
+        elif self.state == GameState.KEYBINDINGS:
+            self._handle_keybindings_input(action)
+
         elif self.state == GameState.ABOUT:
             if action in (Action.BACK, Action.SELECT, Action.MENU, Action.QUIT):
                 self.state = GameState.MAIN_MENU
@@ -142,7 +164,7 @@ class Game:
                 self.snake.change_direction(Direction.LEFT)
             elif action == Action.RIGHT:
                 self.snake.change_direction(Direction.RIGHT)
-            elif action == Action.PAUSE:
+            elif action in (Action.PAUSE, Action.SELECT, Action.BACK):
                 self.elapsed_time += time.perf_counter() - self._last_resume_time
                 self._pause_start_time = time.perf_counter()
                 self.state = GameState.PAUSED
@@ -150,7 +172,7 @@ class Game:
                 self.state = GameState.MAIN_MENU
 
         elif self.state == GameState.PAUSED:
-            if action in (Action.PAUSE, Action.SELECT, Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT):
+            if action in (Action.PAUSE, Action.SELECT, Action.BACK, Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT):
                 pause_duration = time.perf_counter() - self._pause_start_time
                 if self.super_food is not None:
                     self.super_food.spawn_time += pause_duration
@@ -160,6 +182,10 @@ class Game:
                 self.state = GameState.PLAYING
             elif action in (Action.QUIT, Action.MENU):
                 self.state = GameState.MAIN_MENU
+
+        elif self.state == GameState.DYING:
+            if action in (Action.SELECT, Action.BACK, Action.RESTART, Action.MENU):
+                self._trigger_game_over()
 
         elif self.state == GameState.GAME_OVER:
             if action in (Action.RESTART, Action.SELECT):
@@ -171,9 +197,9 @@ class Game:
 
     def _handle_settings_input(self, action: Action) -> None:
         if action == Action.UP:
-            self.settings_index = (self.settings_index - 1) % 6
+            self.settings_index = (self.settings_index - 1) % 7
         elif action == Action.DOWN:
-            self.settings_index = (self.settings_index + 1) % 6
+            self.settings_index = (self.settings_index + 1) % 7
         elif action == Action.LEFT:
             if self.settings_index == 0:
                 self.config.width = max(10, self.config.width - 2)
@@ -182,6 +208,7 @@ class Game:
             elif self.settings_index == 2:
                 idx = THEME_NAMES.index(self.config.theme_name) if self.config.theme_name in THEME_NAMES else 0
                 self.config.theme_name = THEME_NAMES[(idx - 1) % len(THEME_NAMES)]
+                self.renderer.theme = get_theme(self.config.theme_name)
             elif self.settings_index == 3:
                 self.config.initial_speed = max(1.0, round(self.config.initial_speed - 0.5, 1))
             elif self.settings_index == 4:
@@ -194,14 +221,23 @@ class Game:
             elif self.settings_index == 2:
                 idx = THEME_NAMES.index(self.config.theme_name) if self.config.theme_name in THEME_NAMES else 0
                 self.config.theme_name = THEME_NAMES[(idx + 1) % len(THEME_NAMES)]
+                self.renderer.theme = get_theme(self.config.theme_name)
             elif self.settings_index == 3:
                 self.config.initial_speed = min(25.0, round(self.config.initial_speed + 0.5, 1))
             elif self.settings_index == 4:
                 self.config.super_food_enabled = not self.config.super_food_enabled
+            elif self.settings_index == 5:
+                self.keybindings_index = 0
+                self.binding_target = None
+                self.state = GameState.KEYBINDINGS
         elif action == Action.SELECT:
             if self.settings_index == 4:
                 self.config.super_food_enabled = not self.config.super_food_enabled
             elif self.settings_index == 5:
+                self.keybindings_index = 0
+                self.binding_target = None
+                self.state = GameState.KEYBINDINGS
+            elif self.settings_index == 6:
                 self.config.save_settings()
                 self.board = Board(self.config.width, self.config.height)
                 self.state = GameState.MAIN_MENU
@@ -210,7 +246,40 @@ class Game:
             self.board = Board(self.config.width, self.config.height)
             self.state = GameState.MAIN_MENU
 
+    def _handle_keybindings_input(self, action: Action) -> None:
+        action_keys = ["up", "down", "left", "right", "pause"]
+        if action == Action.UP:
+            self.keybindings_index = (self.keybindings_index - 1) % 7
+        elif action == Action.DOWN:
+            self.keybindings_index = (self.keybindings_index + 1) % 7
+        elif action == Action.SELECT:
+            if self.keybindings_index < len(action_keys):
+                self.binding_target = action_keys[self.keybindings_index]
+            elif self.keybindings_index == 5:
+                self.config.keybindings = dict(InputHandler.DEFAULT_KEYBINDINGS)
+                self.input_handler.set_keybindings(self.config.keybindings)
+                self.config.save_settings()
+            elif self.keybindings_index == 6:
+                self.state = GameState.SETTINGS
+        elif action in (Action.BACK, Action.MENU):
+            self.state = GameState.SETTINGS
+
+    def _start_death_animation(self) -> None:
+        self.elapsed_time += time.perf_counter() - self._last_resume_time
+        self.state = GameState.DYING
+        self._death_start_time = time.perf_counter()
+        self.death_flash = True
+
     def _update(self) -> None:
+        if self.state == GameState.DYING:
+            elapsed = time.perf_counter() - self._death_start_time
+            # 3 cycles of 0.15s ON / 0.15s OFF = 0.9s
+            blink_phase = int(elapsed / 0.15)
+            self.death_flash = (blink_phase % 2 == 0)
+            if elapsed >= 0.9:
+                self._trigger_game_over()
+            return
+
         if self.state != GameState.PLAYING:
             return
 
@@ -253,7 +322,7 @@ class Game:
 
         # Self collision check
         if self.snake.collides_with_self():
-            self._trigger_game_over()
+            self._start_death_animation()
             return
 
         # Handle post-step food spawn
@@ -283,10 +352,11 @@ class Game:
                 )
 
             if self.food is None:
-                self._trigger_game_over()
+                self._start_death_animation()
 
     def _trigger_game_over(self) -> None:
-        self.elapsed_time += time.perf_counter() - self._last_resume_time
+        if self.state != GameState.DYING:
+            self.elapsed_time += time.perf_counter() - self._last_resume_time
         if self.score > 0 and self.storage.save_high_score(self.score):
             self.is_new_high = True
             self.high_score = max(self.high_score, self.score)
@@ -313,10 +383,20 @@ class Game:
                 refresh=True,
             )
 
+        elif self.state == GameState.KEYBINDINGS:
+            live.update(
+                self.renderer.render_keybindings_menu(
+                    config=self.config,
+                    selected_index=self.keybindings_index,
+                    binding_target=self.binding_target,
+                ),
+                refresh=True,
+            )
+
         elif self.state == GameState.ABOUT:
             live.update(self.renderer.render_about_creator(), refresh=True)
 
-        elif self.state in (GameState.PLAYING, GameState.PAUSED):
+        elif self.state in (GameState.PLAYING, GameState.PAUSED, GameState.DYING):
             play_time = self._current_play_time()
             live.update(
                 self.renderer.render_game_view(
@@ -331,6 +411,8 @@ class Game:
                     super_food=self.super_food,
                     current_time=time.perf_counter(),
                     is_paused=(self.state == GameState.PAUSED),
+                    is_dying=(self.state == GameState.DYING),
+                    death_flash=self.death_flash,
                 ),
                 refresh=True,
             )

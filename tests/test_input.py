@@ -19,3 +19,18 @@ def test_input_char_mapping():
     assert InputHandler._map_char("q") == Action.QUIT
     assert InputHandler._map_char("b") == Action.BACK
     assert InputHandler._map_char("\x08") == Action.BACK
+
+
+def test_custom_keybindings():
+    custom_keys = {"up": "i", "down": "k", "left": "j", "right": "l", "pause": "o"}
+    handler = InputHandler(keybindings=custom_keys)
+
+    assert handler.map_char("i") == Action.UP
+    assert handler.map_char("I") == Action.UP
+    assert handler.map_char("k") == Action.DOWN
+    assert handler.map_char("j") == Action.LEFT
+    assert handler.map_char("l") == Action.RIGHT
+    assert handler.map_char("o") == Action.PAUSE
+
+    # Default WASD should not trigger UP when remapped
+    assert handler.map_char("w") is None

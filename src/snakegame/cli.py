@@ -30,10 +30,10 @@ class RichArgumentParser(argparse.ArgumentParser):
 
 def display_help(console: Console) -> None:
     header = Text()
-    header.append("  ╔═════════════════════════════════════════════════════════════╗\n", style="bold bright_green")
-    header.append("  ║                     S N A K E   G A M E                     ║\n", style="bold bright_green")
-    header.append("  ║                       Terminal CLI Edition                  ║\n", style="bold bright_green")
-    header.append("  ╚═════════════════════════════════════════════════════════════╝", style="bold bright_green")
+    header.append("  ╔════════════════════════════════════════════════════════════╗\n", style="bold bright_green")
+    header.append("  ║                     S N A K E   G A M E                    ║\n", style="bold bright_green")
+    header.append("  ║                    Terminal CLI Edition                    ║\n", style="bold bright_green")
+    header.append("  ╚════════════════════════════════════════════════════════════╝", style="bold bright_green")
 
     banner_panel = Panel(
         Align.center(header),
@@ -67,20 +67,23 @@ def display_help(console: Console) -> None:
 
     features_table.add_row("Interactive Menu", "Start Game, Settings, About Creator, Exit")
     features_table.add_row("Custom Settings", "Real-time terminal dimension preview, theme picker, size adjust")
+    features_table.add_row("Custom Keybindings", "Remap movement & pause keys in Settings with persistence")
     features_table.add_row("5 Color Themes", "Nokia Classic, Cyberpunk Neon, Retro Amber, Synthwave, Matrix")
     features_table.add_row("SuperFood (Bonus)", "Spawns every 5 foods with a 5-second countdown timer (+50 pts, +3 size)")
+    features_table.add_row("Wrap-Around Walls", "Snake teleports through boundaries to opposite side")
+    features_table.add_row("Death Indicator", "Head flashes red cross upon collision to show defeat location")
 
     controls_table = Table(box=ROUNDED, border_style="dim green", show_header=True, expand=True)
     controls_table.add_column("Action", style="bold cyan", ratio=3)
     controls_table.add_column("Keys", style="bold bright_white", ratio=5)
 
-    controls_table.add_row("Move Snake / Navigate", "Arrow Keys (↑ ↓ ← →) or W / A / S / D")
+    controls_table.add_row("Move Snake / Navigate", "Arrow Keys (↑ ↓ ← →) or Custom Keys (WASD default)")
     controls_table.add_row("Select / Confirm", "Enter  or  Spacebar")
     controls_table.add_row("Back / Cancel", "ESC  or  B")
-    controls_table.add_row("Pause / Resume", "P  or  Spacebar")
+    controls_table.add_row("Pause / Resume", "Spacebar,  ESC,  or  P")
     controls_table.add_row("Restart Game", "R  (on Game Over)")
     controls_table.add_row("Main Menu", "M  (on Game Over or Pause)")
-    controls_table.add_row("Quit", "Q  or  ESC")
+    controls_table.add_row("Quit", "Q  or  ESC (on Main Menu / Game Over)")
 
     examples_text = Text.from_markup(
         "[bold]Standard Game:[/]            [green]snakegame[/green]\n"

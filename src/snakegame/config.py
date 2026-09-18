@@ -1,9 +1,17 @@
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 from snakegame.theme import THEME_NAMES
+
+DEFAULT_KEYBINDINGS: dict[str, str] = {
+    "up": "w",
+    "down": "s",
+    "left": "a",
+    "right": "d",
+    "pause": "p",
+}
 
 
 class ConfigError(ValueError):
@@ -26,6 +34,7 @@ class GameConfig:
     super_food_duration: float = 5.0
     super_food_points: int = 50
     super_food_growth: int = 3
+    keybindings: Dict[str, str] = field(default_factory=lambda: dict(DEFAULT_KEYBINDINGS))
     storage_path: Optional[Path] = None
     settings_path: Optional[Path] = None
 
@@ -64,6 +73,7 @@ class GameConfig:
                 "initial_speed": self.initial_speed,
                 "theme_name": self.theme_name,
                 "super_food_enabled": self.super_food_enabled,
+                "keybindings": self.keybindings,
             }
             with open(target, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
@@ -88,5 +98,10 @@ class GameConfig:
                 self.theme_name = data["theme_name"]
             if "super_food_enabled" in data and isinstance(data["super_food_enabled"], bool):
                 self.super_food_enabled = data["super_food_enabled"]
+            if "keybindings" in data and isinstance(data["keybindings"], dict):
+                for k in ("up", "down", "left", "right", "pause"):
+                    val = data["keybindings"].get(k)
+                    if isinstance(val, str) and val:
+                        self.keybindings[k] = val.lower()
         except (json.JSONDecodeError, OSError, TypeError):
             pass

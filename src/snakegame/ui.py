@@ -36,6 +36,8 @@ class GameRenderer:
         food: Optional[Food],
         super_food: Optional[SuperFood] = None,
         is_paused: bool = False,
+        is_dying: bool = False,
+        death_flash: bool = False,
     ) -> Panel:
         theme = self.theme
         lines = []
@@ -61,7 +63,7 @@ class GameRenderer:
                 lines.append(row_text)
                 continue
             elif is_paused and y == mid_y + 1:
-                prompt_str = " Press [P] or [SPACE] to Resume "
+                prompt_str = " Press SPACE, ESC or P to Resume • M for Menu "
                 row_width = board.width * 2
                 padded_prompt = prompt_str.center(row_width)
                 if self.config.no_color:
@@ -75,7 +77,15 @@ class GameRenderer:
             for x in range(board.width):
                 pt = Point(x, y)
                 if pt == head:
-                    if self.config.no_color:
+                    if is_dying:
+                        if death_flash:
+                            if self.config.no_color:
+                                row_text.append("XX")
+                            else:
+                                row_text.append("XX", style="bold bright_white on bright_red")
+                        else:
+                            row_text.append("  ")
+                    elif self.config.no_color:
                         row_text.append("@@")
                     else:
                         row_text.append("██", style=theme.head_style)
@@ -191,8 +201,12 @@ class GameRenderer:
         super_food: Optional[SuperFood] = None,
         current_time: float = 0.0,
         is_paused: bool = False,
+        is_dying: bool = False,
+        death_flash: bool = False,
     ) -> Align:
-        board_panel = self.render_board(board, snake, food, super_food, is_paused=is_paused)
+        board_panel = self.render_board(
+            board, snake, food, super_food, is_paused=is_paused, is_dying=is_dying, death_flash=death_flash
+        )
         stats_panel = self.render_stats_bar(
             board=board,
             score=score,
@@ -217,12 +231,19 @@ class GameRenderer:
             "Exit",
         ]
 
-        # Header without leading spaces for true geometric centering
-        header_text = Text()
-        header_text.append("╔═══════════════════════════════════════════════════╗\n", style="bold bright_green")
-        header_text.append("║                S N A K E   G A M E                ║\n", style="bold bright_green")
-        header_text.append("║                  Terminal CLI Edition             ║\n", style="bold bright_green")
-        header_text.append("╚═══════════════════════════════════════════════════╝", style="bold bright_green")
+        # Inner header panel with double border for clean, distortion-free rendering
+        header_panel = Panel(
+            Align.center(
+                Text(
+                    "S N A K E   G A M E\nTerminal CLI Edition",
+                    style="bold bright_green" if not self.config.no_color else "bold white",
+                )
+            ),
+            box=DOUBLE,
+            border_style="bold bright_green" if not self.config.no_color else "white",
+            width=46,
+            padding=(0, 1),
+        )
 
         best_score_text = Text.from_markup(
             f"[yellow]★ All-Time High Score:[/] [bold bright_white]{high_score} points[/bold bright_white]"
@@ -246,17 +267,15 @@ class GameRenderer:
                 else:
                     btn = Text(padded, style="bold bright_white on grey19")
             menu_elements.append(Align.center(btn))
-            # Clean vertical spacing between menu items
             menu_elements.append(Text(""))
 
-        divider = Text("─" * 45, style="dim green" if not self.config.no_color else "dim white")
+        divider = Text("─" * 46, style="dim green" if not self.config.no_color else "dim white")
         nav_hints = Text.from_markup(
-            "[dim]Navigation: [bold bright_white]↑ / W[/] & [bold bright_white]↓ / S[/]  •  "
-            "Select: [bold bright_white]ENTER / SPACE[/]  •  [bold bright_white]Q[/] Exit[/dim]"
+            "[dim][bold bright_white]↑/W/↓/S[/] Navigate  •  [bold bright_white]ENTER/SPACE[/] Select  •  [bold bright_white]Q[/] Exit[/dim]"
         )
 
         content = Group(
-            Align.center(header_text),
+            Align.center(header_panel),
             Text("\n"),
             Align.center(best_score_text),
             Text("\n"),
@@ -269,7 +288,7 @@ class GameRenderer:
         panel = Panel(
             content,
             box=DOUBLE,
-            width=58,
+            width=64,
             border_style=theme.border_style if not self.config.no_color else "white",
             padding=(1, 2),
             title="[bold green]Snake Game CLI[/bold green]" if not self.config.no_color else "Snake Game CLI",
@@ -291,7 +310,8 @@ class GameRenderer:
             ("Color Theme", f"< {config.theme_name} >"),
             ("Initial Speed", f"< {config.initial_speed:.1f} moves/sec >"),
             ("SuperFood (Bonus)", f"< {'ENABLED' if config.super_food_enabled else 'DISABLED'} >"),
-            ("Action", "[ SAVE & RETURN TO MAIN MENU ]"),
+            ("Keybindings", "[ CONFIGURE KEYS > ]"),
+            ("Action", "[ SAVE & RETURN ]"),
         ]
 
         title = Text("S E T T I N G S   &   C U S T O M I Z A T I O N\n", style="bold bright_cyan")
@@ -324,7 +344,8 @@ class GameRenderer:
             table.add_row(opt_str, val_str)
 
         instructions = Text.from_markup(
-            "\n[dim][↑/W/↓/S] Navigate  •  [←/A/→/D] Change Value  •  [ENTER/SPACE] Select  •  [ESC/B] Back to Menu[/dim]"
+            "\n[dim][bold bright_white]↑/↓[/] Navigate  •  [bold bright_white]←/→[/] Change  •  "
+            "[bold bright_white]ENTER[/] Select  •  [bold bright_white]ESC[/] Back[/dim]"
         )
 
         content = Group(
@@ -338,9 +359,75 @@ class GameRenderer:
         panel = Panel(
             content,
             box=DOUBLE,
+            width=64,
             border_style=theme.border_style,
-            padding=(1, 3),
+            padding=(1, 2),
             title="[bold cyan]GAME CONFIGURATION[/bold cyan]",
+            title_align="center",
+        )
+        return Align.center(panel)
+
+    def render_keybindings_menu(
+        self,
+        config: GameConfig,
+        selected_index: int,
+        binding_target: Optional[str] = None,
+    ) -> Align:
+        theme = self.theme
+        title = Text("K E Y B I N D I N G S\n", style="bold bright_cyan")
+
+        bindings = config.keybindings
+        items = [
+            ("Move Up", bindings.get("up", "w").upper()),
+            ("Move Down", bindings.get("down", "s").upper()),
+            ("Move Left", bindings.get("left", "a").upper()),
+            ("Move Right", bindings.get("right", "d").upper()),
+            ("Pause Game", bindings.get("pause", "p").upper()),
+            ("Reset Defaults", "[ RESTORE DEFAULT KEYS ]"),
+            ("Back to Settings", "[ RETURN TO SETTINGS ]"),
+        ]
+
+        action_keys = ["up", "down", "left", "right", "pause"]
+
+        table = Table(box=ROUNDED, border_style=theme.border_style, show_header=False, expand=True)
+        table.add_column("Action", style="bold white", ratio=5)
+        table.add_column("Assigned Key", justify="center", ratio=5)
+
+        for i, (act, val) in enumerate(items):
+            if binding_target is not None and i < len(action_keys) and action_keys[i] == binding_target:
+                opt_str = f"[bold yellow]▶ {act}[/]"
+                val_str = "[bold bright_white on red] [ PRESS ANY KEY... ] [/]"
+            elif i == selected_index:
+                opt_str = f"[bold bright_green]▶ {act}[/]"
+                val_str = f"[bold bright_black on bright_green]  {val}  [/]"
+            else:
+                opt_str = f"  {act}"
+                val_str = f"[cyan]{val}[/]"
+            table.add_row(opt_str, val_str)
+
+        if binding_target is not None:
+            prompt = Text.from_markup(
+                "\n[bold bright_yellow]Press any key to bind, or [ESC] to cancel[/bold bright_yellow]"
+            )
+        else:
+            prompt = Text.from_markup(
+                "\n[dim][bold bright_white]↑/↓[/] Navigate  •  [bold bright_white]ENTER[/] Rebind  •  [bold bright_white]ESC[/] Back[/dim]\n"
+                "[dim](Arrow keys, SPACE & ESC are always available)[/dim]"
+            )
+
+        content = Group(
+            Align.center(title),
+            table,
+            Align.center(prompt),
+        )
+
+        panel = Panel(
+            content,
+            box=DOUBLE,
+            width=64,
+            border_style=theme.border_style,
+            padding=(1, 2),
+            title="[bold cyan]KEYBOARD CONTROLS[/bold cyan]",
             title_align="center",
         )
         return Align.center(panel)
@@ -354,8 +441,8 @@ class GameRenderer:
         card.add_column(justify="left", style="white")
 
         card.add_row("Author:", "Made with ❤️ by [bold bright_yellow]ItsReZNuM[/]")
-        card.add_row("GitHub Profile:", "https://github.com/ItsReZNuM")
-        card.add_row("Repository:", "https://github.com/ItsReZNuM/SnakeGame-CLI")
+        card.add_row("GitHub:", "github.com/ItsReZNuM")
+        card.add_row("Repository:", "github.com/ItsReZNuM/SnakeGame-CLI")
         card.add_row("Telegram:", "t.me/ItsReZNuM")
         card.add_row("Instagram:", "instagram.com/rez.num")
 
@@ -377,8 +464,9 @@ class GameRenderer:
         panel = Panel(
             content,
             box=DOUBLE,
+            width=64,
             border_style=theme.border_style,
-            padding=(1, 4),
+            padding=(1, 3),
             title="[bold green]ABOUT CREATOR[/bold green]",
             title_align="center",
         )
@@ -393,13 +481,16 @@ class GameRenderer:
         is_new_high: bool,
         super_foods_eaten: int = 0,
     ) -> Align:
-        title_style = "bold bright_red" if not self.config.no_color else "bold"
+        title_style = "bold bright_red" if not self.config.no_color else "bold white"
         border_style = "red" if not self.config.no_color else "white"
 
-        banner = Text()
-        banner.append("╔═══════════════════════════════════════════════════╗\n", style=title_style)
-        banner.append("║               G A M E   O V E R                   ║\n", style=title_style)
-        banner.append("╚═══════════════════════════════════════════════════╝\n", style=title_style)
+        banner = Panel(
+            Align.center(Text("G A M E   O V E R", style=title_style)),
+            box=DOUBLE,
+            border_style="bold red" if not self.config.no_color else "white",
+            width=46,
+            padding=(0, 1),
+        )
 
         high_note = ""
         if is_new_high and score > 0:
@@ -441,6 +532,7 @@ class GameRenderer:
         panel = Panel(
             content,
             box=ROUNDED,
+            width=64,
             border_style=border_style,
             padding=(1, 3),
             title="[bold red]GAME OVER[/bold red]" if not self.config.no_color else "GAME OVER",

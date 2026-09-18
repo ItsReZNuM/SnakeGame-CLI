@@ -3,6 +3,7 @@ from snakegame.board import Point
 from snakegame.config import GameConfig
 from snakegame.food import Food
 from snakegame.game import Game, GameState
+from snakegame.input import Action
 from snakegame.snake import Direction
 from snakegame.ui import format_timer
 
@@ -95,3 +96,79 @@ def test_eating_food_increases_score_and_length(tmp_path):
     assert game.score == 10
     assert game.snake.head == target_point
     assert game.snake.length == initial_len + 1
+
+
+def test_pause_with_space_and_esc(tmp_path):
+    storage_file = tmp_path / "test_score.json"
+    config = GameConfig(storage_path=storage_file)
+    game = Game(config=config)
+    game._reset_game()
+    game.state = GameState.PLAYING
+
+    # Pressing SPACE (mapped to Action.SELECT) pauses the game
+    game.input_handler = type("MockInput", (), {"get_action": staticmethod(lambda: Action.SELECT)})()
+    game._handle_input()
+    assert game.state == GameState.PAUSED
+
+    # Pressing SPACE again resumes the game
+    game._handle_input()
+    assert game.state == GameState.PLAYING
+
+    # Pressing ESC (mapped to Action.BACK) pauses the game
+    game.input_handler = type("MockInput", (), {"get_action": staticmethod(lambda: Action.BACK)})()
+    game._handle_input()
+    assert game.state == GameState.PAUSED
+
+    # Pressing ESC again resumes the game
+    game._handle_input()
+    assert game.state == GameState.PLAYING
+
+
+def test_death_animation_on_self_collision(tmp_path):
+    storage_file = tmp_path / "test_score.json"
+    config = GameConfig(width=10, height=10, storage_path=storage_file)
+    game = Game(config=config)
+    game._reset_game()
+
+    # Create a 5-segment snake that runs into itself
+    # Head at (5, 5), body at (5, 4), (6, 4), (6, 5), (6, 6)
+    game.snake.body.clear()
+    game.snake.body.append(Point(5, 5))
+    game.snake.body.append(Point(5, 4))
+    game.snake.body.append(Point(6, 4))
+    game.snake.body.append(Point(6, 5))
+    game.snake.body.append(Point(6, 6))
+    game.snake.direction = Direction.RIGHT
+    game.snake.next_direction = Direction.RIGHT
+
+    game._last_tick_time = 0
+    game._update()
+
+    # Collision should transition to DYING state, not directly to GAME_OVER
+    assert game.state == GameState.DYING
+    assert game.death_flash is True
+
+    # Fast forward death timer past 0.9s
+    game._death_start_time = time.perf_counter() - 1.0
+    game._update()
+
+    # Now it should be GAME_OVER
+    assert game.state == GameState.GAME_OVER
+
+
+def test_settings_open_keybindings(tmp_path):
+    storage_file = tmp_path / "test_score.json"
+    config = GameConfig(storage_path=storage_file)
+    game = Game(config=config)
+
+    game.state = GameState.SETTINGS
+    game.settings_index = 5  # Keybindings row
+
+    game._handle_settings_input(Action.SELECT)
+    assert game.state == GameState.KEYBINDINGS
+
+    # In KEYBINDINGS, navigate down to row 6 (Back to Settings)
+    game._handle_keybindings_input(Action.DOWN)  # row 1
+    game.keybindings_index = 6
+    game._handle_keybindings_input(Action.SELECT)
+    assert game.state == GameState.SETTINGS

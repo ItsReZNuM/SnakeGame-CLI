@@ -160,13 +160,15 @@ snakegame --speed 10.0
 
 | Action | Primary Keys | Alternative Keys |
 | :--- | :--- | :--- |
-| **Move / Menu Navigate** | `↑` `↓` `←` `→` (Arrow Keys) | `W` `A` `S` `D` |
+| **Move / Menu Navigate** | `↑` `↓` `←` `→` (Arrow Keys) | Custom Keys (`W` `A` `S` `D` default) |
 | **Select / Confirm** | `Enter` | `Spacebar` |
 | **Back / Cancel** | `ESC` | `B` / `Backspace` |
-| **Pause / Resume** | `P` | `Spacebar` |
-| **Restart Game** | `R` *(after Game Over)* | `Spacebar` |
+| **Pause / Resume** | `Spacebar` | `ESC` / `P` |
+| **Restart Game** | `R` *(after Game Over)* | `Enter` / `Spacebar` |
 | **Main Menu** | `M` *(after Game Over or Pause)* | `ESC` |
-| **Quit** | `Q` | `ESC` |
+| **Quit** | `Q` | `ESC` (on Menu/GameOver) |
+
+> 💡 **Custom Keybindings**: Configure your custom controls anytime from **Settings → Keybindings**! Changes are automatically saved to `~/.snakegame/settings.json`.
 
 ---
 

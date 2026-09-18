@@ -27,8 +27,22 @@ class Action(Enum):
 
 
 class InputHandler:
-    def __init__(self) -> None:
+    DEFAULT_KEYBINDINGS: dict[str, str] = {
+        "up": "w",
+        "down": "s",
+        "left": "a",
+        "right": "d",
+        "pause": "p",
+    }
+
+    def __init__(self, keybindings: Optional[dict[str, str]] = None) -> None:
         self._orig_termios = None
+        self.keybindings: dict[str, str] = dict(self.DEFAULT_KEYBINDINGS)
+        if keybindings:
+            self.keybindings.update(keybindings)
+
+    def set_keybindings(self, keybindings: dict[str, str]) -> None:
+        self.keybindings.update(keybindings)
 
     def enter(self) -> None:
         if not WINDOWS and sys.stdin.isatty():
@@ -50,6 +64,41 @@ class InputHandler:
         if WINDOWS:
             return self._get_action_windows()
         return self._get_action_unix()
+
+    def get_raw_key(self) -> Optional[str]:
+        """Read a single raw key without action mapping (for key binding)."""
+        if WINDOWS:
+            if not msvcrt.kbhit():
+                return None
+            ch = msvcrt.getwch()
+            if ch == "\x03":
+                raise KeyboardInterrupt
+            if ch in ("\x00", "\xe0"):
+                msvcrt.getwch()
+                return None
+            if ch == "\x1b":
+                return "esc"
+            if ch in ("\r", "\n"):
+                return "enter"
+            if ch == " ":
+                return "space"
+            return ch.lower()
+        else:
+            if not sys.stdin.isatty():
+                return None
+            rlist, _, _ = select.select([sys.stdin], [], [], 0)
+            if not rlist:
+                return None
+            ch = sys.stdin.read(1)
+            if ch == "\x03":
+                raise KeyboardInterrupt
+            if ch == "\x1b":
+                return "esc"
+            if ch in ("\r", "\n"):
+                return "enter"
+            if ch == " ":
+                return "space"
+            return ch.lower()
 
     def _get_action_windows(self) -> Optional[Action]:
         if not msvcrt.kbhit():
@@ -91,7 +140,7 @@ class InputHandler:
                             return Action.RIGHT
             return Action.BACK
 
-        return self._map_char(ch)
+        return self._map_char_with_bindings(ch)
 
     def _get_action_unix(self) -> Optional[Action]:
         if not sys.stdin.isatty():
@@ -119,25 +168,38 @@ class InputHandler:
                     return Action.RIGHT
             return Action.BACK
 
-        return self._map_char(ch)
+        return self._map_char_with_bindings(ch)
+
+    def map_char(self, ch: str) -> Optional[Action]:
+        return self._map_char_with_bindings(ch)
+
+    def _map_char_with_bindings(self, ch: str) -> Optional[Action]:
+        return self._map_char_static(ch, self.keybindings)
 
     @staticmethod
-    def _map_char(ch: str) -> Optional[Action]:
+    def _map_char_static(ch: str, keybindings: Optional[dict[str, str]] = None) -> Optional[Action]:
+        bindings = keybindings or InputHandler.DEFAULT_KEYBINDINGS
         low = ch.lower()
-        if low == "w":
+        up_key = bindings.get("up", "w")
+        down_key = bindings.get("down", "s")
+        left_key = bindings.get("left", "a")
+        right_key = bindings.get("right", "d")
+        pause_key = bindings.get("pause", "p")
+
+        if low == up_key:
             return Action.UP
-        elif low == "s":
+        elif low == down_key:
             return Action.DOWN
-        elif low == "a":
+        elif low == left_key:
             return Action.LEFT
-        elif low == "d":
+        elif low == right_key:
             return Action.RIGHT
+        elif low == pause_key:
+            return Action.PAUSE
         elif low in (" ", "\r", "\n"):
             return Action.SELECT
         elif low in ("\x08", "b"):
             return Action.BACK
-        elif low == "p":
-            return Action.PAUSE
         elif low == "r":
             return Action.RESTART
         elif low == "m":
@@ -145,3 +207,7 @@ class InputHandler:
         elif low == "q":
             return Action.QUIT
         return None
+
+    @staticmethod
+    def _map_char(ch: str) -> Optional[Action]:
+        return InputHandler._map_char_static(ch)
