@@ -11,6 +11,7 @@ from snakegame.food import Food, SuperFood
 from snakegame.input import Action, InputHandler
 from snakegame.snake import Direction, Snake
 from snakegame.storage import ScoreStorage
+from snakegame.terminal import TerminalDetector, TerminalInfo
 from snakegame.theme import THEME_NAMES, get_theme
 from snakegame.ui import GameRenderer
 
@@ -40,6 +41,11 @@ class Game:
 
         self.board = Board(width=config.width, height=config.height)
         self.high_score = self.storage.load_high_score()
+
+        self.terminal_info: TerminalInfo = TerminalDetector.detect()
+        self._needs_render: bool = True
+        self._last_term_size = None
+        self._last_render_time: float = 0.0
 
         self.state = GameState.MAIN_MENU
         self.main_menu_index = 0
@@ -79,6 +85,7 @@ class Game:
         self.food = Food.spawn(self.board, self.snake.body_set, points=self.config.points_per_food)
         self.super_food = None
         self.state = GameState.PLAYING
+        self._needs_render = True
         now = time.perf_counter()
         self._last_resume_time = now
         self._last_tick_time = now
@@ -93,15 +100,34 @@ class Game:
         self.input_handler.enter()
         try:
             with Live(
-                self.renderer.render_main_menu(self.main_menu_index, self.high_score),
+                self.renderer.render_main_menu(
+                    self.main_menu_index,
+                    self.high_score,
+                    terminal_name=self.terminal_info.name,
+                ),
                 console=self.console,
                 screen=True,
                 auto_refresh=False,
             ) as live:
+                self._last_term_size = self.console.size
+                self._last_render_time = time.perf_counter()
+                self._needs_render = False
+
                 while self.state != GameState.EXIT:
                     self._handle_input()
                     self._update()
-                    self._render(live)
+
+                    # Dynamic terminal resize detection
+                    current_size = self.console.size
+                    if self._last_term_size != current_size:
+                        self._last_term_size = current_size
+                        self._needs_render = True
+
+                    if self._needs_render:
+                        self._render(live)
+                        self._needs_render = False
+                        self._last_render_time = time.perf_counter()
+
                     time.sleep(0.015)
         except KeyboardInterrupt:
             pass
@@ -113,6 +139,7 @@ class Game:
         if self.state == GameState.KEYBINDINGS and self.binding_target is not None:
             raw_key = self.input_handler.get_raw_key()
             if raw_key is not None:
+                self._needs_render = True
                 if raw_key == "esc":
                     self.binding_target = None
                 else:
@@ -126,6 +153,8 @@ class Game:
         action = self.input_handler.get_action()
         if action is None:
             return
+
+        self._needs_render = True
 
         if self.state == GameState.MAIN_MENU:
             if action == Action.UP:
@@ -269,13 +298,19 @@ class Game:
         self.state = GameState.DYING
         self._death_start_time = time.perf_counter()
         self.death_flash = True
+        self._needs_render = True
 
     def _update(self) -> None:
+        now = time.perf_counter()
+
         if self.state == GameState.DYING:
-            elapsed = time.perf_counter() - self._death_start_time
+            elapsed = now - self._death_start_time
             # 3 cycles of 0.15s ON / 0.15s OFF = 0.9s
             blink_phase = int(elapsed / 0.15)
-            self.death_flash = (blink_phase % 2 == 0)
+            flash = (blink_phase % 2 == 0)
+            if flash != self.death_flash:
+                self.death_flash = flash
+                self._needs_render = True
             if elapsed >= 0.9:
                 self._trigger_game_over()
             return
@@ -283,11 +318,15 @@ class Game:
         if self.state != GameState.PLAYING:
             return
 
-        now = time.perf_counter()
-
         # Check SuperFood expiration
         if self.super_food is not None and self.super_food.is_expired(now):
             self.super_food = None
+            self._needs_render = True
+
+        # Throttle live clock/countdown rendering based on terminal recommended FPS
+        min_render_interval = 1.0 / self.terminal_info.recommended_fps
+        if now - self._last_render_time >= min_render_interval:
+            self._needs_render = True
 
         tick_interval = 1.0 / self.current_speed
         if now - self._last_tick_time < tick_interval:
@@ -319,6 +358,7 @@ class Game:
                 self.storage.save_high_score(self.high_score)
 
         new_head = self.snake.step(self.board.width, self.board.height)
+        self._needs_render = True
 
         # Self collision check
         if self.snake.collides_with_self():
@@ -361,6 +401,7 @@ class Game:
             self.is_new_high = True
             self.high_score = max(self.high_score, self.score)
         self.state = GameState.GAME_OVER
+        self._needs_render = True
 
     def _current_play_time(self) -> float:
         if self.state == GameState.PLAYING:
@@ -369,7 +410,14 @@ class Game:
 
     def _render(self, live: Live) -> None:
         if self.state == GameState.MAIN_MENU:
-            live.update(self.renderer.render_main_menu(self.main_menu_index, self.high_score), refresh=True)
+            live.update(
+                self.renderer.render_main_menu(
+                    self.main_menu_index,
+                    self.high_score,
+                    terminal_name=self.terminal_info.name,
+                ),
+                refresh=True,
+            )
 
         elif self.state == GameState.SETTINGS:
             term_size = self.console.size
@@ -379,6 +427,7 @@ class Game:
                     selected_index=self.settings_index,
                     term_width=term_size.width,
                     term_height=term_size.height,
+                    terminal_name=self.terminal_info.name,
                 ),
                 refresh=True,
             )
@@ -394,7 +443,12 @@ class Game:
             )
 
         elif self.state == GameState.ABOUT:
-            live.update(self.renderer.render_about_creator(), refresh=True)
+            live.update(
+                self.renderer.render_about_creator(
+                    terminal_name=self.terminal_info.name,
+                ),
+                refresh=True,
+            )
 
         elif self.state in (GameState.PLAYING, GameState.PAUSED, GameState.DYING):
             play_time = self._current_play_time()

@@ -30,8 +30,9 @@ def test_display_help_renders_without_exception():
 
 
 def test_display_version_renders_without_exception():
+    from snakegame import __version__
     console = Console(record=True)
     display_version(console)
     output = console.export_text()
     assert "SnakeGame CLI" in output
-    assert "0.1.0" in output
+    assert __version__ in output

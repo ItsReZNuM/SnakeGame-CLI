@@ -39,6 +39,10 @@ Built with extensive customization, 5 vibrant color themes, an interactive main 
   - Automatically remembers your customized settings in `~/.snakegame/settings.json`.
 - **Accurate Gameplay Timer**:
   - Millisecond-precision active timer (`MM:SS`) that pauses when you pause or browse menus.
+- **Cross-Platform & Zero-Flicker Engine**:
+  - Intelligent environment detection across Windows Terminal, Classic CMD, Termux (Android), macOS (iTerm2, Apple Terminal), and Linux (Kitty, Alacritty, WezTerm, tmux).
+  - Event-driven dirty rendering eliminates screen flickering and minimizes CPU and battery consumption across all platforms.
+  - Subtle terminal identification badge displayed cleanly in menus and settings.
 - **Polished CLI**:
   - Custom Rich-rendered `--help` guide, `--theme` flag, and user-friendly error messages without Python tracebacks.
 

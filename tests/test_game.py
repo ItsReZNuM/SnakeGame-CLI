@@ -172,3 +172,24 @@ def test_settings_open_keybindings(tmp_path):
     game.keybindings_index = 6
     game._handle_keybindings_input(Action.SELECT)
     assert game.state == GameState.SETTINGS
+
+
+def test_dirty_render_flag_behavior(tmp_path):
+    storage_file = tmp_path / "test_score.json"
+    config = GameConfig(storage_path=storage_file)
+    game = Game(config=config)
+
+    # Initial state
+    assert game._needs_render is True
+    game._needs_render = False
+
+    # When idle without input in main menu, _update does not trigger render
+    game._update()
+    assert game._needs_render is False
+
+    # When action is received, _needs_render becomes True
+    game.input_handler.get_action = lambda: Action.DOWN
+    game._handle_input()
+    assert game._needs_render is True
+    assert game.main_menu_index == 1
+

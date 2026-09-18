@@ -222,7 +222,12 @@ class GameRenderer:
         combined = Group(board_panel, stats_panel)
         return Align.center(combined)
 
-    def render_main_menu(self, selected_index: int, high_score: int) -> Align:
+    def render_main_menu(
+        self,
+        selected_index: int,
+        high_score: int,
+        terminal_name: Optional[str] = None,
+    ) -> Align:
         theme = self.theme
         menu_items = [
             "Start Game",
@@ -274,15 +279,24 @@ class GameRenderer:
             "[dim][bold bright_white]↑/W/↓/S[/] Navigate  •  [bold bright_white]ENTER/SPACE[/] Select  •  [bold bright_white]Q[/] Exit[/dim]"
         )
 
+        footer_items = [
+            Align.center(divider),
+            Text("\n"),
+            Align.center(nav_hints),
+        ]
+        if terminal_name:
+            footer_items.extend([
+                Text("\n"),
+                Align.center(Text.from_markup(f"[dim]Terminal: [bright_black]{terminal_name}[/bright_black][/dim]")),
+            ])
+
         content = Group(
             Align.center(header_panel),
             Text("\n"),
             Align.center(best_score_text),
             Text("\n"),
             *menu_elements,
-            Align.center(divider),
-            Text("\n"),
-            Align.center(nav_hints),
+            *footer_items,
         )
 
         panel = Panel(
@@ -302,6 +316,7 @@ class GameRenderer:
         selected_index: int,
         term_width: int,
         term_height: int,
+        terminal_name: Optional[str] = None,
     ) -> Align:
         theme = self.theme
         settings_items = [
@@ -318,9 +333,10 @@ class GameRenderer:
 
         req_width = max(54, config.width * 2 + 4)
         req_height = config.height + 9
+        term_label = f"Env: [bold bright_white]{terminal_name}[/] | " if terminal_name else ""
         size_info = Text.from_markup(
-            f"[dim]Live Terminal Size: [bold bright_white]{term_width} cols × {term_height} lines[/bold bright_white] "
-            f"| Arena Requires: [bold bright_white]≥ {req_width} × {req_height}[/bold bright_white][/dim]\n"
+            f"[dim]{term_label}Size: [bold bright_white]{term_width} cols × {term_height} lines[/bold bright_white] "
+            f"| Arena Needs: [bold bright_white]≥ {req_width} × {req_height}[/bold bright_white][/dim]\n"
         )
 
         warning_text = Text()
@@ -432,7 +448,7 @@ class GameRenderer:
         )
         return Align.center(panel)
 
-    def render_about_creator(self) -> Align:
+    def render_about_creator(self, terminal_name: Optional[str] = None) -> Align:
         theme = self.theme
         title = Text("A B O U T   T H E   C R E A T O R\n", style="bold bright_green")
 
@@ -445,6 +461,8 @@ class GameRenderer:
         card.add_row("Repository:", "github.com/ItsReZNuM/SnakeGame-CLI")
         card.add_row("Telegram:", "t.me/ItsReZNuM")
         card.add_row("Instagram:", "instagram.com/rez.num")
+        if terminal_name:
+            card.add_row("Terminal:", f"[dim]{terminal_name}[/dim]")
 
         star_msg = (
             "\n[bold bright_yellow]⭐ Enjoying the game?[/bold bright_yellow]\n"
