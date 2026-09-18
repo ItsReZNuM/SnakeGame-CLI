@@ -53,7 +53,7 @@ def test_speed_progression(tmp_path):
     assert game.current_speed == 8.0
 
 
-def test_wall_collision_ends_game(tmp_path):
+def test_wall_wrap_around(tmp_path):
     storage_file = tmp_path / "test_score.json"
     config = GameConfig(width=10, height=10, storage_path=storage_file)
     game = Game(config=config)
@@ -68,11 +68,12 @@ def test_wall_collision_ends_game(tmp_path):
     game.snake.body[1] = Point(8, 5)
     game.snake.body[2] = Point(7, 5)
 
-    # Step will move to (10, 5) which is out of bounds
-    game._last_tick_time = 0  # force tick execution
+    # Step should wrap around to (0, 5) instead of dying
+    game._last_tick_time = 0
     game._update()
 
-    assert game.state == GameState.GAME_OVER
+    assert game.state == GameState.PLAYING
+    assert game.snake.head == Point(0, 5)
 
 
 def test_eating_food_increases_score_and_length(tmp_path):

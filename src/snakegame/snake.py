@@ -1,6 +1,6 @@
 from collections import deque
 from enum import Enum
-from typing import Deque, List, Set
+from typing import Deque, List, Optional, Set
 
 from snakegame.board import Point
 
@@ -41,8 +41,14 @@ class Snake:
     def head(self) -> Point:
         return self.body[0]
 
-    def peek_next_head(self) -> Point:
-        return Point(self.head.x + self.next_direction.dx, self.head.y + self.next_direction.dy)
+    def peek_next_head(self, width: Optional[int] = None, height: Optional[int] = None) -> Point:
+        nx = self.head.x + self.next_direction.dx
+        ny = self.head.y + self.next_direction.dy
+        if width is not None:
+            nx = nx % width
+        if height is not None:
+            ny = ny % height
+        return Point(nx, ny)
 
     @property
     def length(self) -> int:
@@ -58,9 +64,15 @@ class Snake:
         self.next_direction = new_direction
         return True
 
-    def step(self) -> Point:
+    def step(self, width: Optional[int] = None, height: Optional[int] = None) -> Point:
         self.direction = self.next_direction
-        new_head = Point(self.head.x + self.direction.dx, self.head.y + self.direction.dy)
+        nx = self.head.x + self.direction.dx
+        ny = self.head.y + self.direction.dy
+        if width is not None:
+            nx = nx % width
+        if height is not None:
+            ny = ny % height
+        new_head = Point(nx, ny)
         self.body.appendleft(new_head)
         if self.grow_pending > 0:
             self.grow_pending -= 1

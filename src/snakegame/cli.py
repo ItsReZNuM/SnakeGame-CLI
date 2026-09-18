@@ -145,14 +145,21 @@ def main(argv: Optional[List[str]] = None) -> int:
             display_version(console)
             return 0
 
-        config = GameConfig(
-            width=args.width,
-            height=args.height,
-            initial_speed=args.speed,
-            no_color=args.no_color,
-        )
+        config = GameConfig(no_color=args.no_color)
+        config.load_saved_settings()
+
+        # Command line arguments override saved settings if specified
+        if args.width != 24 or "--width" in sys.argv or "-w" in sys.argv:
+            config.width = args.width
+        if args.height != 16 or "--height" in sys.argv or "-H" in sys.argv:
+            config.height = args.height
+        if args.speed != 6.0 or "--speed" in sys.argv or "-s" in sys.argv:
+            config.initial_speed = args.speed
         if args.theme:
             config.theme_name = args.theme
+        if args.no_color:
+            config.no_color = True
+
         config.validate()
 
     except ConfigError as exc:

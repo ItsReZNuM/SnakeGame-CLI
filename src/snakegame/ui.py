@@ -1,6 +1,6 @@
 from typing import Optional, List
 from rich.align import Align
-from rich.box import ROUNDED, DOUBLE, HEAVY
+from rich.box import ROUNDED, DOUBLE, HEAVY, HORIZONTALS
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
@@ -35,6 +35,7 @@ class GameRenderer:
         snake: Snake,
         food: Optional[Food],
         super_food: Optional[SuperFood] = None,
+        is_paused: bool = False,
     ) -> Panel:
         theme = self.theme
         lines = []
@@ -45,7 +46,31 @@ class GameRenderer:
         food_pos = food.position if food else None
         super_food_pos = super_food.position if super_food else None
 
+        mid_y = board.height // 2
+
         for y in range(board.height):
+            # If paused, render high-visibility pause banner across the center rows
+            if is_paused and y == mid_y:
+                banner_str = " ⏸   P A U S E D   ⏸ "
+                row_width = board.width * 2
+                padded_banner = banner_str.center(row_width)
+                if self.config.no_color:
+                    row_text = Text(padded_banner, style="reverse")
+                else:
+                    row_text = Text(padded_banner, style="bold bright_black on bright_yellow")
+                lines.append(row_text)
+                continue
+            elif is_paused and y == mid_y + 1:
+                prompt_str = " Press [P] or [SPACE] to Resume "
+                row_width = board.width * 2
+                padded_prompt = prompt_str.center(row_width)
+                if self.config.no_color:
+                    row_text = Text(padded_prompt, style="bold")
+                else:
+                    row_text = Text(padded_prompt, style="bold white on grey19")
+                lines.append(row_text)
+                continue
+
             row_text = Text()
             for x in range(board.width):
                 pt = Point(x, y)
@@ -80,10 +105,13 @@ class GameRenderer:
 
         board_content = Text("\n").join(lines)
         border_style = "white" if self.config.no_color else theme.border_style
+        panel_width = max(54, board.width * 2 + 4)
+
         return Panel(
-            board_content,
+            Align.center(board_content),
             border_style=border_style,
             box=ROUNDED,
+            width=panel_width,
             padding=(0, 1),
             title="[bold green]Snake Game CLI[/bold green]" if not self.config.no_color else "Snake Game CLI",
             title_align="center",
@@ -91,11 +119,13 @@ class GameRenderer:
 
     def render_stats_bar(
         self,
+        board: Board,
         score: int,
         high_score: int,
         elapsed_time: float,
         speed: float,
         length: int,
+        regular_foods_eaten: int = 0,
         super_food: Optional[SuperFood] = None,
         current_time: float = 0.0,
         is_paused: bool = False,
@@ -125,24 +155,28 @@ class GameRenderer:
 
         table.add_row(s_score, s_best, s_time, s_speed, s_len)
 
-        status_elements = []
-        if is_paused:
-            status_elements.append("[bold bright_yellow][ PAUSED - Press P or Space to Resume ][/]")
-
+        # Dedicated SuperFood status line (prevents layout jumping)
         if super_food is not None and not super_food.is_expired(current_time):
             left = super_food.time_left(current_time)
-            badge = f"[bold bright_yellow]★ SUPERFOOD: {left:.1f}s (+50 PTS) ★[/bold bright_yellow]"
-            status_elements.append(badge)
+            super_line = f"[bold bright_yellow]★ SUPERFOOD: {left:.1f}s (+50 PTS / +3 LENGTH) ★[/bold bright_yellow]"
+        elif self.config.super_food_enabled:
+            next_in = self.config.super_food_interval - (regular_foods_eaten % self.config.super_food_interval)
+            super_line = f"[dim]★ SuperFood spawns in {next_in} food{'s' if next_in != 1 else ''} ★[/dim]"
+        else:
+            super_line = "[dim]★ SuperFood: Disabled ★[/dim]"
 
-        footer_elements = ["[dim]Controls: [↑/W/↓/S/←/A/→/D] Move  [P/Space] Pause  [Q] Quit[/dim]"]
-        if status_elements:
-            footer_elements.extend(status_elements)
+        footer_text = "[dim]Controls: [↑/W/↓/S/←/A/→/D] Move  [P] Pause  [M] Menu  [Q] Quit[/dim]"
 
-        footer_text = "  ".join(footer_elements) if not self.config.no_color else Text.from_markup(footer_text).plain
+        content = Group(
+            table,
+            Text(""),
+            Align.center(Text.from_markup(super_line) if not self.config.no_color else Text(super_line)),
+            Align.center(Text.from_markup(footer_text) if not self.config.no_color else Text(footer_text)),
+        )
 
-        content = Group(table, Align.center(Text.from_markup(footer_text)))
+        panel_width = max(54, board.width * 2 + 4)
         border_style = "dim green" if not self.config.no_color else "white"
-        return Panel(content, box=ROUNDED, border_style=border_style)
+        return Panel(content, box=ROUNDED, width=panel_width, border_style=border_style)
 
     def render_game_view(
         self,
@@ -153,17 +187,20 @@ class GameRenderer:
         high_score: int,
         elapsed_time: float,
         speed: float,
+        regular_foods_eaten: int = 0,
         super_food: Optional[SuperFood] = None,
         current_time: float = 0.0,
         is_paused: bool = False,
     ) -> Align:
-        board_panel = self.render_board(board, snake, food, super_food)
+        board_panel = self.render_board(board, snake, food, super_food, is_paused=is_paused)
         stats_panel = self.render_stats_bar(
+            board=board,
             score=score,
             high_score=high_score,
             elapsed_time=elapsed_time,
             speed=speed,
             length=snake.length,
+            regular_foods_eaten=regular_foods_eaten,
             super_food=super_food,
             current_time=current_time,
             is_paused=is_paused,
@@ -180,38 +217,61 @@ class GameRenderer:
             "Exit",
         ]
 
+        # Header without leading spaces for true geometric centering
         header_text = Text()
-        header_text.append("  ╔═══════════════════════════════════════════════════╗\n", style="bold bright_green")
-        header_text.append("  ║                S N A K E   G A M E                ║\n", style="bold bright_green")
-        header_text.append("  ║                  Terminal CLI Edition             ║\n", style="bold bright_green")
-        header_text.append("  ╚═══════════════════════════════════════════════════╝\n", style="bold bright_green")
+        header_text.append("╔═══════════════════════════════════════════════════╗\n", style="bold bright_green")
+        header_text.append("║                S N A K E   G A M E                ║\n", style="bold bright_green")
+        header_text.append("║                  Terminal CLI Edition             ║\n", style="bold bright_green")
+        header_text.append("╚═══════════════════════════════════════════════════╝", style="bold bright_green")
 
-        menu_table = Table.grid(padding=(1, 2))
-        menu_table.add_column(justify="center", min_width=30)
+        best_score_text = Text.from_markup(
+            f"[yellow]★ All-Time High Score:[/] [bold bright_white]{high_score} points[/bold bright_white]"
+        )
 
+        BUTTON_WIDTH = 28
+        menu_elements = []
         for i, item in enumerate(menu_items):
             if i == selected_index:
-                styled_item = f"[bold bright_black on bright_green]  ▶  {item.upper()}  ◀  [/]"
+                label = f"▶   {item.upper()}   ◀"
+                padded = label.center(BUTTON_WIDTH)
+                if self.config.no_color:
+                    btn = Text(padded, style="reverse")
+                else:
+                    btn = Text(padded, style=f"bold bright_black on {theme.accent_style}")
             else:
-                styled_item = f"[dim white]     {item}     [/dim white]"
-            menu_table.add_row(styled_item)
+                label = item
+                padded = label.center(BUTTON_WIDTH)
+                if self.config.no_color:
+                    btn = Text(padded, style="white")
+                else:
+                    btn = Text(padded, style="bold bright_white on grey19")
+            menu_elements.append(Align.center(btn))
+            # Clean vertical spacing between menu items
+            menu_elements.append(Text(""))
 
-        best_score_text = Text.from_markup(f"\n[yellow]★ All-Time High Score:[/] [bold bright_white]{high_score}[/]\n")
-        nav_hints = Text.from_markup("[dim]Use [↑/W] & [↓/S] to Navigate  •  Press [ENTER/SPACE] to Select  •  [Q] Exit[/dim]")
+        divider = Text("─" * 45, style="dim green" if not self.config.no_color else "dim white")
+        nav_hints = Text.from_markup(
+            "[dim]Navigation: [bold bright_white]↑ / W[/] & [bold bright_white]↓ / S[/]  •  "
+            "Select: [bold bright_white]ENTER / SPACE[/]  •  [bold bright_white]Q[/] Exit[/dim]"
+        )
 
         content = Group(
             Align.center(header_text),
+            Text("\n"),
             Align.center(best_score_text),
-            Align.center(menu_table),
-            Align.center(Text("")),
+            Text("\n"),
+            *menu_elements,
+            Align.center(divider),
+            Text("\n"),
             Align.center(nav_hints),
         )
 
         panel = Panel(
             content,
             box=DOUBLE,
+            width=58,
             border_style=theme.border_style if not self.config.no_color else "white",
-            padding=(1, 3),
+            padding=(1, 2),
             title="[bold green]Snake Game CLI[/bold green]" if not self.config.no_color else "Snake Game CLI",
             title_align="center",
         )
@@ -236,8 +296,7 @@ class GameRenderer:
 
         title = Text("S E T T I N G S   &   C U S T O M I Z A T I O N\n", style="bold bright_cyan")
 
-        # Live terminal dimension info
-        req_width = config.width * 2 + 6
+        req_width = max(54, config.width * 2 + 4)
         req_height = config.height + 9
         size_info = Text.from_markup(
             f"[dim]Live Terminal Size: [bold bright_white]{term_width} cols × {term_height} lines[/bold bright_white] "
@@ -247,7 +306,7 @@ class GameRenderer:
         warning_text = Text()
         if term_width < req_width or term_height < req_height:
             warning_text = Text.from_markup(
-                "[bold bright_red]⚠️ Warning:[/] Your terminal window is smaller than current arena dimensions!\n"
+                "[bold bright_red]⚠️ Warning:[/] Terminal is smaller than arena requirements!\n"
                 "[dim]Please expand the terminal window or decrease arena dimensions.[/dim]\n"
             )
 
@@ -338,9 +397,9 @@ class GameRenderer:
         border_style = "red" if not self.config.no_color else "white"
 
         banner = Text()
-        banner.append("  ╔═══════════════════════════════════════════════════╗\n", style=title_style)
-        banner.append("  ║               G A M E   O V E R                   ║\n", style=title_style)
-        banner.append("  ╚═══════════════════════════════════════════════════╝\n", style=title_style)
+        banner.append("╔═══════════════════════════════════════════════════╗\n", style=title_style)
+        banner.append("║               G A M E   O V E R                   ║\n", style=title_style)
+        banner.append("╚═══════════════════════════════════════════════════╝\n", style=title_style)
 
         high_note = ""
         if is_new_high and score > 0:

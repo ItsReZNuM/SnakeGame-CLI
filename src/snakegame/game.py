@@ -31,8 +31,6 @@ GameState.START_SCREEN = GameState.MAIN_MENU  # type: ignore
 class Game:
     def __init__(self, config: GameConfig, console: Optional[Console] = None) -> None:
         self.config = config
-        self.config.load_saved_settings()
-
         self.console = console or Console(no_color=config.no_color)
         self.storage = ScoreStorage(config.storage_path)
         self.renderer = GameRenderer(config, self.console)
@@ -227,7 +225,7 @@ class Game:
             return
 
         self._last_tick_time = now
-        next_head = self.snake.peek_next_head()
+        next_head = self.snake.peek_next_head(self.board.width, self.board.height)
 
         eating_regular = self.food is not None and next_head == self.food.position
         eating_super = self.super_food is not None and next_head == self.super_food.position
@@ -251,12 +249,7 @@ class Game:
                 self.is_new_high = True
                 self.storage.save_high_score(self.high_score)
 
-        new_head = self.snake.step()
-
-        # Wall collision check
-        if not self.board.is_in_bounds(new_head):
-            self._trigger_game_over()
-            return
+        new_head = self.snake.step(self.board.width, self.board.height)
 
         # Self collision check
         if self.snake.collides_with_self():
@@ -334,6 +327,7 @@ class Game:
                     high_score=self.high_score,
                     elapsed_time=play_time,
                     speed=self.current_speed,
+                    regular_foods_eaten=self.regular_foods_eaten,
                     super_food=self.super_food,
                     current_time=time.perf_counter(),
                     is_paused=(self.state == GameState.PAUSED),
