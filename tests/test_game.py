@@ -193,3 +193,44 @@ def test_dirty_render_flag_behavior(tmp_path):
     assert game._needs_render is True
     assert game.main_menu_index == 1
 
+
+def test_settings_theme_cycling(tmp_path):
+    from snakegame.theme import THEME_NAMES
+    storage_file = tmp_path / "test_score.json"
+    config = GameConfig(storage_path=storage_file)
+    game = Game(config=config)
+
+    game.state = GameState.SETTINGS
+    game.settings_index = 2  # Theme row
+
+    initial_theme = game.config.theme_name
+
+    # Cycle forward
+    game._handle_settings_input(Action.RIGHT)
+    assert game.config.theme_name != initial_theme
+    assert game.renderer.theme.name == game.config.theme_name
+
+    # Cycle backward
+    game._handle_settings_input(Action.LEFT)
+    assert game.config.theme_name == initial_theme
+    assert game.renderer.theme.name == initial_theme
+
+
+def test_renderer_theme_setter(tmp_path):
+    from snakegame.theme import get_theme
+    storage_file = tmp_path / "test_score.json"
+    config = GameConfig(storage_path=storage_file)
+    game = Game(config=config)
+
+    # Set by Theme object
+    new_theme = get_theme("Matrix Monochrome")
+    game.renderer.theme = new_theme
+    assert game.config.theme_name == "Matrix Monochrome"
+    assert game.renderer.theme.name == "Matrix Monochrome"
+
+    # Set by string
+    game.renderer.theme = "Cyberpunk Neon"
+    assert game.config.theme_name == "Cyberpunk Neon"
+    assert game.renderer.theme.name == "Cyberpunk Neon"
+
+

@@ -29,6 +29,13 @@ class GameRenderer:
     def theme(self):
         return get_theme(self.config.theme_name)
 
+    @theme.setter
+    def theme(self, value):
+        if hasattr(value, "name"):
+            self.config.theme_name = value.name
+        elif isinstance(value, str):
+            self.config.theme_name = value
+
     def render_board(
         self,
         board: Board,

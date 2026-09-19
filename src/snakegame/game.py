@@ -237,7 +237,6 @@ class Game:
             elif self.settings_index == 2:
                 idx = THEME_NAMES.index(self.config.theme_name) if self.config.theme_name in THEME_NAMES else 0
                 self.config.theme_name = THEME_NAMES[(idx - 1) % len(THEME_NAMES)]
-                self.renderer.theme = get_theme(self.config.theme_name)
             elif self.settings_index == 3:
                 self.config.initial_speed = max(1.0, round(self.config.initial_speed - 0.5, 1))
             elif self.settings_index == 4:
@@ -250,7 +249,6 @@ class Game:
             elif self.settings_index == 2:
                 idx = THEME_NAMES.index(self.config.theme_name) if self.config.theme_name in THEME_NAMES else 0
                 self.config.theme_name = THEME_NAMES[(idx + 1) % len(THEME_NAMES)]
-                self.renderer.theme = get_theme(self.config.theme_name)
             elif self.settings_index == 3:
                 self.config.initial_speed = min(25.0, round(self.config.initial_speed + 0.5, 1))
             elif self.settings_index == 4:
