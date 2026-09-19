@@ -51,3 +51,49 @@ def test_game_eating_super_food(tmp_path):
     game.snake.step()
     assert game.snake.length == initial_len + 3
     assert game.snake.grow_pending == 0
+
+
+def test_super_food_dynamic_duration_at_higher_speed(tmp_path):
+    storage_file = tmp_path / "test_score.json"
+    config = GameConfig(
+        width=15,
+        height=15,
+        initial_speed=6.0,
+        speed_increment=1.0,
+        super_food_duration=5.0,
+        storage_path=storage_file,
+    )
+    game = Game(config=config)
+    game._reset_game()
+
+    # Trigger superfood spawn at initial speed (6.0)
+    game.regular_foods_eaten = 4
+    game.food = Point(game.snake.head.x + 1, game.snake.head.y)  # place food in front
+    from snakegame.food import Food
+    game.food = Food(position=Point(game.snake.head.x + 1, game.snake.head.y), points=10)
+    game._last_tick_time = 0
+    game._update()
+
+    assert game.regular_foods_eaten == 5
+    assert game.super_food is not None
+    duration_at_speed_1 = game.super_food.duration
+    # Should be less than or equal to base duration (5.0s)
+    assert duration_at_speed_1 <= 5.0
+
+    # Increase eaten foods so speed is even higher, then test next spawn
+    game.super_food = None
+    game.regular_foods_eaten = 9
+    game.score = 90  # higher score -> higher speed
+    speed_1 = game.current_speed
+
+    game.food = Food(position=Point(game.snake.head.x + 1, game.snake.head.y), points=10)
+    game._last_tick_time = 0
+    game._update()
+
+    assert game.regular_foods_eaten == 10
+    assert game.super_food is not None
+    assert game.current_speed > speed_1
+    duration_at_speed_2 = game.super_food.duration
+    # Duration at higher speed must be strictly shorter than at lower speed
+    assert duration_at_speed_2 < duration_at_speed_1
+

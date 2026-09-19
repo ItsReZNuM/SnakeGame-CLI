@@ -61,9 +61,9 @@ class GameRenderer:
         for y in range(board.height):
             # If paused, render high-visibility pause banner across the center rows
             if is_paused and y == mid_y:
-                banner_str = " ⏸   P A U S E D   ⏸ "
                 row_width = board.width * 2
-                padded_banner = banner_str.center(row_width)
+                banner_str = " ⏸  PAUSED  ⏸ " if row_width < 24 else " ⏸   P A U S E D   ⏸ "
+                padded_banner = banner_str.center(row_width)[:row_width]
                 if self.config.no_color:
                     row_text = Text(padded_banner, style="reverse")
                 else:
@@ -71,9 +71,14 @@ class GameRenderer:
                 lines.append(row_text)
                 continue
             elif is_paused and y == mid_y + 1:
-                prompt_str = " Press SPACE, ESC or P to Resume • M for Menu "
                 row_width = board.width * 2
-                padded_prompt = prompt_str.center(row_width)
+                if row_width < 24:
+                    prompt_str = " [P] Resume "
+                elif row_width < 44:
+                    prompt_str = " SPACE/P to Resume "
+                else:
+                    prompt_str = " Press SPACE, ESC or P to Resume • M for Menu "
+                padded_prompt = prompt_str.center(row_width)[:row_width]
                 if self.config.no_color:
                     row_text = Text(padded_prompt, style="bold")
                 else:
@@ -123,15 +128,20 @@ class GameRenderer:
 
         board_content = Text("\n").join(lines)
         border_style = "white" if self.config.no_color else theme.border_style
-        panel_width = max(54, board.width * 2 + 4)
+        panel_width = board.width * 2 + 2
+
+        if panel_width < 26:
+            board_title = "[bold green]Snake[/bold green]" if not self.config.no_color else "Snake"
+        else:
+            board_title = "[bold green]Snake Game CLI[/bold green]" if not self.config.no_color else "Snake Game CLI"
 
         return Panel(
-            Align.center(board_content),
+            board_content,
             border_style=border_style,
             box=ROUNDED,
             width=panel_width,
-            padding=(0, 1),
-            title="[bold green]Snake Game CLI[/bold green]" if not self.config.no_color else "Snake Game CLI",
+            padding=0,
+            title=board_title,
             title_align="center",
         )
 
@@ -192,7 +202,7 @@ class GameRenderer:
             Align.center(Text.from_markup(footer_text) if not self.config.no_color else Text(footer_text)),
         )
 
-        panel_width = max(54, board.width * 2 + 4)
+        panel_width = max(48, board.width * 2 + 2)
         border_style = "dim green" if not self.config.no_color else "white"
         return Panel(content, box=ROUNDED, width=panel_width, border_style=border_style)
 
@@ -227,7 +237,7 @@ class GameRenderer:
             current_time=current_time,
             is_paused=is_paused,
         )
-        combined = Group(board_panel, stats_panel)
+        combined = Group(Align.center(board_panel), Align.center(stats_panel))
         return Align.center(combined)
 
     def render_main_menu(
@@ -340,8 +350,8 @@ class GameRenderer:
 
         title = Text("S E T T I N G S   &   C U S T O M I Z A T I O N\n", style="bold bright_cyan")
 
-        req_width = max(54, config.width * 2 + 4)
-        req_height = config.height + 9
+        req_width = max(48, config.width * 2 + 2)
+        req_height = config.height + 8
         term_label = f"Env: [bold bright_white]{terminal_name}[/] | " if terminal_name else ""
         size_info = Text.from_markup(
             f"[dim]{term_label}Size: [bold bright_white]{term_width} × {term_height}[/] "

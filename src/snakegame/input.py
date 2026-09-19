@@ -35,6 +35,44 @@ class InputHandler:
         "pause": "p",
     }
 
+    PERSIAN_TO_ENGLISH: dict[str, str] = {
+        "ض": "q",
+        "ص": "w",
+        "ث": "e",
+        "ق": "r",
+        "ف": "t",
+        "غ": "y",
+        "ع": "u",
+        "ه": "i",
+        "خ": "o",
+        "ح": "p",
+        "ج": "[",
+        "چ": "]",
+        "ش": "a",
+        "س": "s",
+        "ی": "d",
+        "ي": "d",
+        "ب": "f",
+        "ل": "g",
+        "ا": "h",
+        "آ": "h",
+        "ت": "j",
+        "ن": "k",
+        "م": "l",
+        "ک": ";",
+        "ك": ";",
+        "گ": "'",
+        "ظ": "z",
+        "ط": "x",
+        "ز": "c",
+        "ر": "v",
+        "ذ": "b",
+        "پ": "m",
+        "ئ": "m",
+        "د": "n",
+        "و": ",",
+    }
+
     def __init__(self, keybindings: Optional[dict[str, str]] = None) -> None:
         self._orig_termios = None
         self.keybindings: dict[str, str] = dict(self.DEFAULT_KEYBINDINGS)
@@ -82,7 +120,8 @@ class InputHandler:
                 return "enter"
             if ch == " ":
                 return "space"
-            return ch.lower()
+            raw = ch.lower()
+            return self.PERSIAN_TO_ENGLISH.get(raw, raw)
         else:
             if not sys.stdin.isatty():
                 return None
@@ -98,7 +137,8 @@ class InputHandler:
                 return "enter"
             if ch == " ":
                 return "space"
-            return ch.lower()
+            raw = ch.lower()
+            return self.PERSIAN_TO_ENGLISH.get(raw, raw)
 
     def _get_action_windows(self) -> Optional[Action]:
         if not msvcrt.kbhit():
@@ -176,38 +216,40 @@ class InputHandler:
     def _map_char_with_bindings(self, ch: str) -> Optional[Action]:
         return self._map_char_static(ch, self.keybindings)
 
-    @staticmethod
-    def _map_char_static(ch: str, keybindings: Optional[dict[str, str]] = None) -> Optional[Action]:
-        bindings = keybindings or InputHandler.DEFAULT_KEYBINDINGS
+    @classmethod
+    def _map_char_static(cls, ch: str, keybindings: Optional[dict[str, str]] = None) -> Optional[Action]:
+        bindings = keybindings or cls.DEFAULT_KEYBINDINGS
         low = ch.lower()
+        norm = cls.PERSIAN_TO_ENGLISH.get(low, low)
+
         up_key = bindings.get("up", "w")
         down_key = bindings.get("down", "s")
         left_key = bindings.get("left", "a")
         right_key = bindings.get("right", "d")
         pause_key = bindings.get("pause", "p")
 
-        if low == up_key:
+        if low == up_key or norm == up_key:
             return Action.UP
-        elif low == down_key:
+        elif low == down_key or norm == down_key:
             return Action.DOWN
-        elif low == left_key:
+        elif low == left_key or norm == left_key:
             return Action.LEFT
-        elif low == right_key:
+        elif low == right_key or norm == right_key:
             return Action.RIGHT
-        elif low == pause_key:
+        elif low == pause_key or norm == pause_key:
             return Action.PAUSE
         elif low in (" ", "\r", "\n"):
             return Action.SELECT
-        elif low in ("\x08", "b"):
+        elif low in ("\x08", "b") or norm == "b":
             return Action.BACK
-        elif low == "r":
+        elif low == "r" or norm == "r":
             return Action.RESTART
-        elif low == "m":
+        elif low == "m" or norm == "m":
             return Action.MENU
-        elif low == "q":
+        elif low == "q" or norm == "q":
             return Action.QUIT
         return None
 
-    @staticmethod
-    def _map_char(ch: str) -> Optional[Action]:
-        return InputHandler._map_char_static(ch)
+    @classmethod
+    def _map_char(cls, ch: str) -> Optional[Action]:
+        return cls._map_char_static(ch)

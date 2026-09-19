@@ -34,3 +34,19 @@ def test_custom_keybindings():
 
     # Default WASD should not trigger UP when remapped
     assert handler.map_char("w") is None
+
+
+def test_persian_keyboard_mapping():
+    # Persian keys corresponding to physical QWERTY positions
+    assert InputHandler._map_char("ص") == Action.UP       # W
+    assert InputHandler._map_char("س") == Action.DOWN     # S
+    assert InputHandler._map_char("ش") == Action.LEFT     # A
+    assert InputHandler._map_char("ی") == Action.RIGHT    # D (Persian Yeh)
+    assert InputHandler._map_char("ي") == Action.RIGHT    # D (Arabic Yeh)
+    assert InputHandler._map_char("ح") == Action.PAUSE    # P
+    assert InputHandler._map_char("ق") == Action.RESTART  # R
+    assert InputHandler._map_char("پ") == Action.MENU     # M
+    assert InputHandler._map_char("ئ") == Action.MENU     # M (alternate)
+    assert InputHandler._map_char("ض") == Action.QUIT     # Q
+    assert InputHandler._map_char("ذ") == Action.BACK     # B
+

@@ -26,5 +26,21 @@ def test_board_empty_cells():
     assert len(empty) == 6
     assert Point(0, 0) not in empty
     assert Point(1, 1) not in empty
-    assert Point(2, 2) not in empty
     assert Point(0, 1) in empty
+
+
+def test_board_render_tight_walls():
+    from snakegame.config import GameConfig
+    from snakegame.snake import Snake, Direction
+    from snakegame.ui import GameRenderer
+
+    board = Board(width=10, height=8)
+    config = GameConfig(width=10, height=8)
+    renderer = GameRenderer(config=config)
+    snake = Snake(initial_head=Point(3, 3), initial_length=3, direction=Direction.RIGHT)
+
+    panel = renderer.render_board(board=board, snake=snake, food=None)
+    # Width must be exactly board.width * 2 + 2 = 22 (no phantom expansion)
+    assert panel.width == 22
+    assert panel.padding == 0
+

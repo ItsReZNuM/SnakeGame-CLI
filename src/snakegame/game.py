@@ -380,11 +380,13 @@ class Game:
                 occupied_all = self.snake.body_set
                 if self.food is not None:
                     occupied_all = occupied_all | {self.food.position}
+                speed_ratio = self.config.initial_speed / max(1.0, self.current_speed)
+                scaled_duration = max(1.8, round(self.config.super_food_duration * speed_ratio, 1))
                 self.super_food = SuperFood.spawn(
                     board=self.board,
                     occupied=occupied_all,
                     spawn_time=time.perf_counter(),
-                    duration=self.config.super_food_duration,
+                    duration=scaled_duration,
                     points=self.config.super_food_points,
                     growth=self.config.super_food_growth,
                 )
