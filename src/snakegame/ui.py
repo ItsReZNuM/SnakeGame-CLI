@@ -11,6 +11,7 @@ from snakegame.config import GameConfig
 from snakegame.food import Food, SuperFood
 from snakegame.snake import Snake
 from snakegame.theme import get_theme, THEME_NAMES
+from snakegame import __version__
 
 
 def format_timer(seconds: float) -> str:
@@ -291,11 +292,12 @@ class GameRenderer:
             Text("\n"),
             Align.center(nav_hints),
         ]
-        if terminal_name:
-            footer_items.extend([
-                Text("\n"),
-                Align.center(Text.from_markup(f"[dim]Terminal: [bright_black]{terminal_name}[/bright_black][/dim]")),
-            ])
+        term_str = f"Terminal: [bold bright_white]{terminal_name}[/]  •  " if terminal_name else ""
+        ver_text = f"[dim]{term_str}Version: [bold bright_white]v{__version__}[/][/dim]"
+        footer_items.extend([
+            Text("\n"),
+            Align.center(Text.from_markup(ver_text)),
+        ])
 
         content = Group(
             Align.center(header_panel),
@@ -342,8 +344,8 @@ class GameRenderer:
         req_height = config.height + 9
         term_label = f"Env: [bold bright_white]{terminal_name}[/] | " if terminal_name else ""
         size_info = Text.from_markup(
-            f"[dim]{term_label}Size: [bold bright_white]{term_width} cols × {term_height} lines[/bold bright_white] "
-            f"| Arena Needs: [bold bright_white]≥ {req_width} × {req_height}[/bold bright_white][/dim]\n"
+            f"[dim]{term_label}Size: [bold bright_white]{term_width} × {term_height}[/] "
+            f"| Version: [bold bright_white]v{__version__}[/] | Arena Needs: [bold bright_white]≥ {req_width} × {req_height}[/][/dim]\n"
         )
 
         warning_text = Text()
@@ -464,6 +466,7 @@ class GameRenderer:
         card.add_column(justify="left", style="white")
 
         card.add_row("Author:", "Made with ❤️ by [bold bright_yellow]ItsReZNuM[/]")
+        card.add_row("Version:", f"[bold bright_cyan]v{__version__}[/]")
         card.add_row("GitHub:", "github.com/ItsReZNuM")
         card.add_row("Repository:", "github.com/ItsReZNuM/SnakeGame-CLI")
         card.add_row("Telegram:", "t.me/ItsReZNuM")
